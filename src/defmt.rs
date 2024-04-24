@@ -106,8 +106,11 @@ pub fn location_info(frame: &Frame, locs: &Option<Locations>) -> LocationInfo {
 
     if let Some(Some(loc)) = loc {
         // try to get the relative path, else the full one
-        let current_dir = std::env::current_dir().unwrap(); //?;
-        let path = loc.file.strip_prefix(current_dir).unwrap_or(&loc.file);
+        let path = if let Ok(current_dir) = std::env::current_dir() {
+            mantra::db::get_relative_path(&current_dir, &loc.file).unwrap_or(loc.file.to_path_buf())
+        } else {
+            loc.file.to_path_buf()
+        };
 
         file = Some(path.display().to_string());
         line = Some(loc.line as u32);

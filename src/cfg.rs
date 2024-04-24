@@ -25,6 +25,7 @@ pub struct MantraConfig {
     pub project_name: String,
     pub db_url: Option<String>,
     pub test_prefix: Option<String>,
+    pub extract: Option<mantra::cmd::extract::Config>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -70,11 +71,11 @@ quit
 ",
             self.openocd_log
                 .clone()
-                .unwrap_or(PathBuf::from("openocd.log"))
+                .unwrap_or(PathBuf::from(".embedded/openocd.log"))
                 .to_string_lossy(),
             self.openocd_cfg
                 .clone()
-                .unwrap_or(PathBuf::from("./openocd.cfg"))
+                .unwrap_or(PathBuf::from(".embedded/openocd.cfg"))
                 .to_string_lossy(),
             resolved_load,
             rtt_address,
