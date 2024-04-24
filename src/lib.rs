@@ -1,0 +1,269 @@
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+    process::{Command, ExitStatus, Stdio},
+    sync::{atomic::AtomicBool, Arc},
+};
+
+use cfg::{CliConfig, Config};
+use defmt_json_schema::v1::JsonFrame;
+
+pub mod cfg;
+pub mod defmt;
+
+#[derive(Debug, thiserror::Error)]
+pub enum RunnerError {
+    #[error("Timeout waiting for rtt connection to start.")]
+    RttTimeout,
+    #[error("Error from gdb: {}", .0)]
+    Gdb(String),
+    #[error("Error setting up the gdp script: {}", .0)]
+    GdbScript(String),
+    #[error("Error reading the runner config: {}", .0.display())]
+    ReadingCfg(PathBuf),
+    #[error("Error parsing the runner config: {}", .0)]
+    ParsingCfg(String),
+    #[error("Error reading defmt logs: {}", .0)]
+    Defmt(String),
+    #[error("Error adding coverage data to mantra: {}", .0)]
+    Mantra(String),
+}
+
+const DEFAULT_RTT_PORT: u16 = 19021;
+
+pub async fn run(cli_cfg: CliConfig) -> Result<ExitStatus, RunnerError> {
+    let runner_cfg = cli_cfg
+        .runner_cfg
+        .unwrap_or(PathBuf::from("embedded-runner.toml"));
+    let runner_cfg: cfg::Config = match std::fs::read_to_string(&runner_cfg) {
+        Ok(runner_cfg) => {
+            toml::from_str(&runner_cfg).map_err(|err| RunnerError::ParsingCfg(err.to_string()))?
+        }
+        Err(_) => return Err(RunnerError::ReadingCfg(runner_cfg)),
+    };
+
+    let gdb_script = runner_cfg
+        .gdb_script(&cli_cfg.binary)
+        .map_err(|_err| RunnerError::GdbScript(String::new()))?;
+
+    let tmp_gdb_file = PathBuf::from("embedded.gdb");
+    std::fs::write(&tmp_gdb_file, gdb_script)
+        .map_err(|err| RunnerError::GdbScript(err.to_string()))?;
+
+    // let mut gdb_cmd = Command::new("arm-none-eabi-gdb");
+    // let mut gdb = gdb_cmd
+    //     .args([
+    //         "-x",
+    //         &tmp_gdb_file.to_string_lossy(),
+    //         &cli_cfg.binary.to_string_lossy(),
+    //     ])
+    //     .stdout(Stdio::piped())
+    //     .stderr(Stdio::piped())
+    //     .spawn()
+    //     .unwrap();
+
+    // let mut open_ocd_output = gdb.stderr.take().unwrap();
+
+    // let mut buf = [0; 100];
+    // let mut content = Vec::new();
+    // let rtt_start = b"for rtt connection";
+
+    // let start = std::time::Instant::now();
+    // 'outer: while let Ok(n) = open_ocd_output.read(&mut buf) {
+    //     if n > 0 {
+    //         content.extend_from_slice(&buf[..n]);
+
+    //         log::info!(
+    //             "OpenOCD: {}",
+    //             String::from_utf8_lossy(&buf[..n])
+    //                 .lines()
+    //                 .collect::<Vec<_>>()
+    //                 .join("         ") // To get indent for "OpenOCD: "
+    //         );
+
+    //         for i in 0..n {
+    //             let slice_end = content.len().saturating_sub(i);
+    //             if content[..slice_end].ends_with(rtt_start) {
+    //                 break 'outer;
+    //             }
+    //         }
+    //     } else if std::time::Instant::now()
+    //         .checked_duration_since(start)
+    //         .unwrap()
+    //         .as_millis()
+    //         > 12000
+    //     {
+    //         log::error!("Timeout while waiting for rtt connection.");
+    //         let _ = gdb.kill();
+    //         return Err(RunnerError::RttTimeout);
+    //     }
+    // }
+
+    // // start defmt thread + end-signal
+    // let end_signal = Arc::new(AtomicBool::new(false));
+    // let thread_signal = end_signal.clone();
+    // let defmt_thread = std::thread::spawn(move || {
+    //     defmt::read_defmt_frames(
+    //         &cli_cfg.binary,
+    //         runner_cfg.rtt_port.unwrap_or(19021),
+    //         thread_signal,
+    //     )
+    // });
+
+    // // wait for gdb to end
+    // let gdb_result = gdb
+    //     .wait()
+    //     .map_err(|err| RunnerError::Gdb(format!("Error waiting for gdb to finish. Cause: {err}")));
+
+    // // signal defmt end
+    // end_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // // join defmt thread to get logs
+    // let defmt_result = defmt_thread
+    //     .join()
+    //     .map_err(|err| RunnerError::Defmt("Failed waiting for defmt logs.".to_string()))?;
+
+    // // print logs
+    // let defmt_frames = defmt_result
+    //     .map_err(|_err| RunnerError::Defmt("Failed extracting defmt logs.".to_string()))?;
+
+    let gdb_sequence = run_gdb_sequence(cli_cfg.binary, &tmp_gdb_file, &runner_cfg);
+
+    // make sure temp file is removed
+    std::fs::remove_file(&tmp_gdb_file).map_err(|err| RunnerError::GdbScript(err.to_string()))?;
+
+    let (defmt_frames, gdb_result) = gdb_sequence?;
+
+    for frame in &defmt_frames {
+        let location = if frame.location.file.is_some()
+            && frame.location.line.is_some()
+            && frame.location.module_path.is_some()
+        {
+            let mod_path = frame.location.module_path.as_ref().unwrap();
+
+            format!(
+                "{}:{} in {}::{}::{}",
+                frame.location.file.as_ref().unwrap(),
+                frame.location.line.unwrap(),
+                mod_path.crate_name,
+                mod_path.modules.join("::"),
+                mod_path.function,
+            )
+        } else {
+            "no-location".to_string()
+        };
+        match frame.level {
+            Some(level) => log::log!(level, "{}\n@{}", frame.data, location),
+            None => println!("{}\n@{}", frame.data, location),
+        }
+    }
+
+    // option: add mantra coverage, if run as test (first defmt log starts with "(nr/nr) running `test fn`...")
+    if let Some(mantra_cfg) = runner_cfg.mantra {
+        let db = mantra::db::MantraDb::new(&mantra::db::Config {
+            url: mantra_cfg.db_url,
+        })
+        .await
+        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+        let current_dir = std::env::current_dir().unwrap_or_default();
+
+        mantra::cmd::coverage::coverage_from_defmt_frames(
+            &defmt_frames,
+            &db,
+            &mantra_cfg.project_name,
+            &PathBuf::from("tests\\"),
+            mantra_cfg.test_prefix.as_deref(),
+        )
+        .await
+        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+    }
+
+    gdb_result
+}
+
+pub fn run_gdb_sequence(
+    binary: PathBuf,
+    tmp_gdb_file: &Path,
+    runner_cfg: &Config,
+) -> Result<
+    (
+        Vec<JsonFrame>,
+        Result<std::process::ExitStatus, RunnerError>,
+    ),
+    RunnerError,
+> {
+    let mut gdb_cmd = Command::new("arm-none-eabi-gdb");
+    let mut gdb = gdb_cmd
+        .args([
+            "-x",
+            &tmp_gdb_file.to_string_lossy(),
+            &binary.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let mut open_ocd_output = gdb.stderr.take().unwrap();
+
+    let mut buf = [0; 100];
+    let mut content = Vec::new();
+    let rtt_start = b"for rtt connection";
+
+    let start = std::time::Instant::now();
+    'outer: while let Ok(n) = open_ocd_output.read(&mut buf) {
+        if n > 0 {
+            content.extend_from_slice(&buf[..n]);
+
+            println!(
+                "OpenOCD: {}",
+                String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .collect::<Vec<_>>()
+                    .join("         ") // To get indent for "OpenOCD: "
+            );
+
+            for i in 0..n {
+                let slice_end = content.len().saturating_sub(i);
+                if content[..slice_end].ends_with(rtt_start) {
+                    break 'outer;
+                }
+            }
+        } else if std::time::Instant::now()
+            .checked_duration_since(start)
+            .unwrap()
+            .as_millis()
+            > 12000
+        {
+            log::error!("Timeout while waiting for rtt connection.");
+            let _ = gdb.kill();
+            return Err(RunnerError::RttTimeout);
+        }
+    }
+
+    // start defmt thread + end-signal
+    let end_signal = Arc::new(AtomicBool::new(false));
+    let thread_signal = end_signal.clone();
+    let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
+    let defmt_thread =
+        std::thread::spawn(move || defmt::read_defmt_frames(&binary, rtt_port, thread_signal));
+
+    // wait for gdb to end
+    let gdb_result = gdb
+        .wait()
+        .map_err(|err| RunnerError::Gdb(format!("Error waiting for gdb to finish. Cause: {err}")));
+
+    // signal defmt end
+    end_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // join defmt thread to get logs
+    let defmt_result = defmt_thread
+        .join()
+        .map_err(|_| RunnerError::Defmt("Failed waiting for defmt logs.".to_string()))?;
+
+    // print logs
+    let defmt_frames = defmt_result
+        .map_err(|err| RunnerError::Defmt(format!("Failed extracting defmt logs. Cause: {err}")))?;
+
+    Ok((defmt_frames, gdb_result))
+}

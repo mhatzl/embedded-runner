@@ -1,0 +1,24 @@
+[package]
+name = "embedded-runner"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+tera = "1.19.1"
+object = "0.35.0"
+mantra = { path = "../mantra/mantra" }
+serde = { version = "1.0.197", features = ["derive"] }
+defmt-decoder = { version = "=0.3.10", features = [
+    "unstable",
+] }
+log = "0.4.21"
+time = "0.3.36"
+defmt-json-schema = "0.1.0"
+defmt-parser = { version = "=0.3.4", features = ["unstable"] }
+toml = "0.8.12"
+tokio = { version = "1.37.0", features = ["full"] }
+env_logger = "0.11.3"
+thiserror = "1.0.59"
