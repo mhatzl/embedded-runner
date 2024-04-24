@@ -1,7 +1,7 @@
 use std::{
     io::Read,
     path::{Path, PathBuf},
-    process::{Command, ExitStatus, Stdio},
+    process::{Command, Stdio},
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -30,12 +30,18 @@ pub enum RunnerError {
     Mantra(String),
     #[error("Failed setting up embedded-runner. Cause: {}", .0)]
     Setup(String),
+    #[error("Failed executing pre runner. Cause: {}", .0)]
+    PreRunner(String),
+    #[error("Failed executing post runner. Cause: {}", .0)]
+    PostRunner(String),
 }
 
 pub const DEFAULT_RTT_PORT: u16 = 19021;
 
-pub async fn run(cli_cfg: CliConfig) -> Result<ExitStatus, RunnerError> {
+pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
+    let binary_str = cli_cfg.binary.display().to_string();
     let embedded_dir: PathBuf = PathBuf::from(".embedded/");
+
     if !embedded_dir.exists() {
         std::fs::create_dir(embedded_dir.clone()).map_err(|err| {
             RunnerError::Setup(format!(
@@ -54,6 +60,32 @@ pub async fn run(cli_cfg: CliConfig) -> Result<ExitStatus, RunnerError> {
         Err(_) => return Err(RunnerError::ReadingCfg(runner_cfg)),
     };
 
+    if let Some(pre_command) = &runner_cfg.pre_runner {
+        println!("--------------- Pre Runner --------------------");
+        let mut args = pre_command.args.clone();
+        args.push(binary_str.clone());
+
+        let output = std::process::Command::new(&pre_command.name)
+            .args(args)
+            .output()
+            .map_err(|err| RunnerError::PreRunner(err.to_string()))?;
+        print!(
+            "{}",
+            String::from_utf8(output.stdout).expect("Stdout must be valid utf8.")
+        );
+        eprint!(
+            "{}",
+            String::from_utf8(output.stderr).expect("Stderr must be valid utf8.")
+        );
+
+        if !output.status.success() {
+            return Err(RunnerError::PreRunner(format!(
+                "Returned with exit code: {}",
+                output.status,
+            )));
+        }
+    }
+
     let gdb_script = runner_cfg
         .gdb_script(&cli_cfg.binary)
         .map_err(|_err| RunnerError::GdbScript(String::new()))?;
@@ -64,6 +96,13 @@ pub async fn run(cli_cfg: CliConfig) -> Result<ExitStatus, RunnerError> {
 
     let (defmt_frames, gdb_result) =
         run_gdb_sequence(cli_cfg.binary, &gdb_script_file, &runner_cfg)?;
+    let gdb_status = gdb_result?;
+
+    if !gdb_status.success() {
+        return Err(RunnerError::Gdb(format!(
+            "GDB did not run successfully. Exit code: '{gdb_status}'"
+        )));
+    }
 
     println!("--------------- Logs --------------------");
     for frame in &defmt_frames {
@@ -136,7 +175,33 @@ pub async fn run(cli_cfg: CliConfig) -> Result<ExitStatus, RunnerError> {
         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
     }
 
-    gdb_result
+    if let Some(post_command) = &runner_cfg.post_runner {
+        println!("--------------- Post Runner --------------------");
+        let mut args = post_command.args.clone();
+        args.push(binary_str);
+
+        let output = std::process::Command::new(&post_command.name)
+            .args(args)
+            .output()
+            .map_err(|err| RunnerError::PostRunner(err.to_string()))?;
+        print!(
+            "{}",
+            String::from_utf8(output.stdout).expect("Stdout must be valid utf8.")
+        );
+        eprint!(
+            "{}",
+            String::from_utf8(output.stderr).expect("Stderr must be valid utf8.")
+        );
+
+        if !output.status.success() {
+            return Err(RunnerError::PostRunner(format!(
+                "Returned with exit code: {}",
+                output.status,
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 #[inline]

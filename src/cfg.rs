@@ -12,20 +12,34 @@ pub struct CliConfig {
 #[derive(Debug, serde::Deserialize)]
 pub struct Config {
     pub load: String,
+    #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
+    #[serde(alias = "openocd-log")]
     pub openocd_log: Option<PathBuf>,
-    pub pre_runner: Option<String>,
-    pub post_runner: Option<String>,
+    #[serde(alias = "pre-runner")]
+    pub pre_runner: Option<Command>,
+    #[serde(alias = "post-runner")]
+    pub post_runner: Option<Command>,
+    #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
     pub mantra: Option<MantraConfig>,
 }
 
 #[derive(Debug, serde::Deserialize)]
 pub struct MantraConfig {
+    #[serde(alias = "project-name")]
     pub project_name: String,
+    #[serde(alias = "db-url")]
     pub db_url: Option<String>,
+    #[serde(alias = "test-prefix")]
     pub test_prefix: Option<String>,
     pub extract: Option<mantra::cmd::extract::Config>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct Command {
+    pub name: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
