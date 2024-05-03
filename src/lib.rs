@@ -7,7 +7,6 @@ use std::{
 
 use cfg::{CliConfig, Config};
 use defmt_json_schema::v1::JsonFrame;
-use mantra::db::GitRepoOrigin;
 
 pub mod cfg;
 pub mod defmt;
@@ -40,12 +39,16 @@ pub const DEFAULT_RTT_PORT: u16 = 19021;
 
 pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
     let binary_str = cli_cfg.binary.display().to_string();
-    let embedded_dir: PathBuf = PathBuf::from(".embedded/");
+    let workspace_dir = mantra::path::get_cargo_root()
+        .map_err(|_| RunnerError::Mantra("No workspace directory found.".to_string()))?;
+    let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
 
     if !embedded_dir.exists() {
         std::fs::create_dir(embedded_dir.clone()).map_err(|err| {
             RunnerError::Setup(format!(
-                "Could not create directory '.embedded/'. Cause: {err}"
+                "Could not create directory '{}'. Cause: {}",
+                embedded_dir.display(),
+                err
             ))
         })?;
     }
@@ -67,6 +70,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 
         let output = std::process::Command::new(&pre_command.name)
             .args(args)
+            .current_dir(&workspace_dir)
             .output()
             .map_err(|err| RunnerError::PreRunner(err.to_string()))?;
         print!(
@@ -94,8 +98,12 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
     std::fs::write(&gdb_script_file, gdb_script)
         .map_err(|err| RunnerError::GdbScript(err.to_string()))?;
 
-    let (defmt_frames, gdb_result) =
-        run_gdb_sequence(cli_cfg.binary, &gdb_script_file, &runner_cfg)?;
+    let (defmt_frames, gdb_result) = run_gdb_sequence(
+        cli_cfg.binary,
+        &workspace_dir,
+        &gdb_script_file,
+        &runner_cfg,
+    )?;
     let gdb_status = gdb_result?;
 
     if !gdb_status.success() {
@@ -131,9 +139,10 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 
     // option: add mantra coverage, if run as test (first defmt log starts with "(nr/nr) running `test fn`...")
     if let Some(mantra_cfg) = runner_cfg.mantra {
-        let db_url = mantra_cfg
-            .db_url
-            .unwrap_or("sqlite://.embedded/mantra.db?mode=rwc".to_string());
+        let db_url = mantra_cfg.db_url.unwrap_or(format!(
+            "sqlite://{}mantra.db?mode=rwc",
+            embedded_dir.display()
+        ));
         let db = mantra::db::MantraDb::new(&mantra::db::Config { url: Some(db_url) })
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
@@ -144,35 +153,19 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
                 .map_err(|err| RunnerError::Mantra(err.to_string()))?;
         }
 
-        db.add_project(
-            &mantra_cfg.project_name,
-            mantra::db::ProjectOrigin::GitRepo(GitRepoOrigin {
-                link: std::env::var("CARGO_PKG_REPOSITORY").unwrap_or("local".to_string()),
-                branch: None,
-            }),
-        )
-        .await
-        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
-
-        let current_dir = std::env::current_dir().unwrap_or_default();
         mantra::cmd::trace::trace(
             &db,
             &mantra::cmd::trace::Config {
-                root: current_dir.clone(),
-                project_name: mantra_cfg.project_name.clone(),
+                root: workspace_dir.clone(),
+                keep_root_absolute: false,
             },
         )
         .await
         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
-        mantra::cmd::coverage::coverage_from_defmt_frames(
-            &defmt_frames,
-            &db,
-            &mantra_cfg.project_name,
-            mantra_cfg.test_prefix.as_deref(),
-        )
-        .await
-        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+        mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &binary_str)
+            .await
+            .map_err(|err| RunnerError::Mantra(err.to_string()))?;
     }
 
     if let Some(post_command) = &runner_cfg.post_runner {
@@ -182,6 +175,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 
         let output = std::process::Command::new(&post_command.name)
             .args(args)
+            .current_dir(&workspace_dir)
             .output()
             .map_err(|err| RunnerError::PostRunner(err.to_string()))?;
         print!(
@@ -207,6 +201,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 #[inline]
 pub fn run_gdb_sequence(
     binary: PathBuf,
+    workspace_dir: &Path,
     tmp_gdb_file: &Path,
     runner_cfg: &Config,
 ) -> Result<
@@ -223,6 +218,7 @@ pub fn run_gdb_sequence(
             &tmp_gdb_file.to_string_lossy(),
             &binary.to_string_lossy(),
         ])
+        .current_dir(workspace_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -265,8 +261,10 @@ pub fn run_gdb_sequence(
     let end_signal = Arc::new(AtomicBool::new(false));
     let thread_signal = end_signal.clone();
     let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
-    let defmt_thread =
-        std::thread::spawn(move || defmt::read_defmt_frames(&binary, rtt_port, thread_signal));
+    let workspace_root = workspace_dir.to_path_buf();
+    let defmt_thread = std::thread::spawn(move || {
+        defmt::read_defmt_frames(&binary, &workspace_root, rtt_port, thread_signal)
+    });
 
     // wait for gdb to end
     let gdb_result = gdb

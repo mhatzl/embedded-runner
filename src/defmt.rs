@@ -23,6 +23,7 @@ pub enum DefmtError {
 
 pub fn read_defmt_frames(
     binary: &Path,
+    workspace_root: &Path,
     tcp_port: u16,
     end_signal: Arc<AtomicBool>,
 ) -> Result<Vec<JsonFrame>, DefmtError> {
@@ -80,7 +81,7 @@ pub fn read_defmt_frames(
         loop {
             match stream_decoder.decode() {
                 Ok(frame) => {
-                    json_frames.push(create_json_frame(&frame, &locs));
+                    json_frames.push(create_json_frame(workspace_root, &frame, &locs));
                 }
                 Err(DecodeError::UnexpectedEof) => break,
                 Err(DecodeError::Malformed) => match table.encoding().can_recover() {
@@ -99,18 +100,19 @@ pub fn read_defmt_frames(
 
 pub type LocationInfo = (Option<String>, Option<u32>, Option<String>);
 
-pub fn location_info(frame: &Frame, locs: &Option<Locations>) -> LocationInfo {
+pub fn location_info(
+    workspace_root: &Path,
+    frame: &Frame,
+    locs: &Option<Locations>,
+) -> LocationInfo {
     let (mut file, mut line, mut mod_path) = (None, None, None);
 
     let loc = locs.as_ref().map(|locs| locs.get(&frame.index()));
 
     if let Some(Some(loc)) = loc {
-        // try to get the relative path, else the full one
-        let path = if let Ok(current_dir) = std::env::current_dir() {
-            mantra::db::get_relative_path(&current_dir, &loc.file).unwrap_or(loc.file.to_path_buf())
-        } else {
-            loc.file.to_path_buf()
-        };
+        // try to get the relative path from workspace root, else the full one
+        let path = mantra::db::get_relative_path(workspace_root, &loc.file)
+            .unwrap_or(loc.file.to_path_buf());
 
         file = Some(path.display().to_string());
         line = Some(loc.line as u32);
@@ -121,8 +123,12 @@ pub fn location_info(frame: &Frame, locs: &Option<Locations>) -> LocationInfo {
 }
 
 /// Create a new [JsonFrame] from a log-frame from the target
-pub fn create_json_frame(frame: &Frame, locs: &Option<Locations>) -> JsonFrame {
-    let (file, line, mod_path) = location_info(frame, locs);
+pub fn create_json_frame(
+    workspace_root: &Path,
+    frame: &Frame,
+    locs: &Option<Locations>,
+) -> JsonFrame {
+    let (file, line, mod_path) = location_info(workspace_root, frame, locs);
     let host_timestamp = time::OffsetDateTime::now_utc()
         .unix_timestamp_nanos()
         .min(i64::MAX as i128) as i64;

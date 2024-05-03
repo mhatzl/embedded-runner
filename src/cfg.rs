@@ -6,6 +6,7 @@ use tera::{Context, Tera};
 #[derive(clap::Parser)]
 pub struct CliConfig {
     pub binary: PathBuf,
+    #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
 }
 
