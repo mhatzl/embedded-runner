@@ -7,6 +7,7 @@ use std::{
 
 use cfg::{CliConfig, Config};
 use defmt_json_schema::v1::JsonFrame;
+use path_clean::PathClean;
 
 pub mod cfg;
 pub mod defmt;
@@ -163,6 +164,28 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         .await
         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
+        if let Some(extern_traces) = mantra_cfg.extern_traces {
+            for trace_root in extern_traces {
+                match absolute_path(trace_root) {
+                    Ok(abs_path) => {
+                        mantra::cmd::trace::trace(
+                            &db,
+                            &mantra::cmd::trace::Config {
+                                root: abs_path,
+                                keep_root_absolute: true,
+                            },
+                        )
+                        .await
+                        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+                    }
+                    Err(_) => {
+                        // TODO: set log for bad extern trace root
+                        todo!()
+                    }
+                }
+            }
+        }
+
         mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &binary_str)
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
@@ -284,4 +307,17 @@ pub fn run_gdb_sequence(
         .map_err(|err| RunnerError::Defmt(format!("Failed extracting defmt logs. Cause: {err}")))?;
 
     Ok((defmt_frames, gdb_result))
+}
+
+/// Converts the given path into an cleaned absolute path.
+/// see: https://stackoverflow.com/questions/30511331/getting-the-absolute-path-from-a-pathbuf
+pub fn absolute_path(path: PathBuf) -> std::io::Result<PathBuf> {
+    let absolute_path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()?.join(path)
+    }
+    .clean();
+
+    Ok(absolute_path)
 }

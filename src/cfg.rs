@@ -28,13 +28,10 @@ pub struct Config {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct MantraConfig {
-    #[serde(alias = "project-name")]
-    pub project_name: String,
     #[serde(alias = "db-url")]
     pub db_url: Option<String>,
-    #[serde(alias = "test-prefix")]
-    pub test_prefix: Option<String>,
     pub extract: Option<mantra::cmd::extract::Config>,
+    pub extern_traces: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, serde::Deserialize)]
