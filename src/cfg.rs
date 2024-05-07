@@ -8,6 +8,8 @@ pub struct CliConfig {
     pub binary: PathBuf,
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
+    #[arg(long, short = 'v')]
+    pub verbose: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -32,6 +34,8 @@ pub struct MantraConfig {
     pub db_url: Option<String>,
     pub extract: Option<mantra::cmd::extract::Config>,
     pub extern_traces: Option<Vec<PathBuf>>,
+    #[serde(default)]
+    pub dry_run: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]

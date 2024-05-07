@@ -40,6 +40,7 @@ pub const DEFAULT_RTT_PORT: u16 = 19021;
 
 pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
     let binary_str = cli_cfg.binary.display().to_string();
+    let verbose = cli_cfg.verbose;
     let workspace_dir = mantra::path::get_cargo_root()
         .map_err(|_| RunnerError::Mantra("No workspace directory found.".to_string()))?;
     let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
@@ -138,8 +139,9 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         }
     }
 
-    // option: add mantra coverage, if run as test (first defmt log starts with "(nr/nr) running `test fn`...")
     if let Some(mantra_cfg) = runner_cfg.mantra {
+        println!("------------- Mantra -------------");
+
         let db_url = mantra_cfg.db_url.unwrap_or(format!(
             "sqlite://{}mantra.db?mode=rwc",
             embedded_dir.display()
@@ -149,12 +151,26 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
         if let Some(extract_cfg) = mantra_cfg.extract {
-            mantra::cmd::extract::extract(&db, &extract_cfg)
+            let req_changes = mantra::cmd::extract::extract(&db, &extract_cfg)
                 .await
                 .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+
+            let deleted_reqs = db
+                .delete_req_generations(req_changes.new_generation)
+                .await
+                .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+            db.reset_req_generation().await;
+
+            if verbose {
+                println!("{req_changes}");
+
+                if let Some(deleted) = deleted_reqs {
+                    println!("{deleted}");
+                }
+            }
         }
 
-        mantra::cmd::trace::trace(
+        let mut changes = mantra::cmd::trace::trace(
             &db,
             &mantra::cmd::trace::Config {
                 root: workspace_dir.clone(),
@@ -164,11 +180,13 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         .await
         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
+        let first_generation = changes.new_generation;
+
         if let Some(extern_traces) = mantra_cfg.extern_traces {
             for trace_root in extern_traces {
                 match absolute_path(trace_root) {
                     Ok(abs_path) => {
-                        mantra::cmd::trace::trace(
+                        let mut extern_changes = mantra::cmd::trace::trace(
                             &db,
                             &mantra::cmd::trace::Config {
                                 root: abs_path,
@@ -177,12 +195,28 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
                         )
                         .await
                         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+
+                        changes.merge(&mut extern_changes);
                     }
                     Err(_) => {
                         // TODO: set log for bad extern trace root
                         todo!()
                     }
                 }
+            }
+        }
+
+        let deleted_traces = db
+            .delete_trace_generations(first_generation)
+            .await
+            .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+        db.reset_trace_generation().await;
+
+        if verbose {
+            println!("{changes}");
+
+            if let Some(deleted) = deleted_traces {
+                println!("{deleted}");
             }
         }
 
