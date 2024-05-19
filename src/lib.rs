@@ -5,12 +5,69 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use cfg::{CliConfig, Config};
+use cfg::{CliConfig, Config, RunConfig, RunnerConfig};
 use defmt_json_schema::v1::JsonFrame;
 use path_clean::PathClean;
 
 pub mod cfg;
 pub mod defmt;
+
+pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
+    let cfg = get_cfg(&cli_cfg)?;
+
+    match cli_cfg.cmd {
+        cfg::Cmd::Run(run_cfg) => run_cmd(&cfg, run_cfg).await,
+        cfg::Cmd::Mantra(mantra_cmd) => {
+            let mantra_cfg = mantra::cfg::Config {
+                db: mantra::db::Config {
+                    url: Some(mantra_db_url(
+                        cfg.runner_cfg.mantra.and_then(|m| m.db_url),
+                        &cfg.embedded_dir,
+                    )),
+                },
+                cmd: mantra_cmd.clone(),
+            };
+
+            mantra::run(mantra_cfg)
+                .await
+                .map_err(|err| RunnerError::Mantra(err.to_string()))
+        }
+    }
+}
+
+pub fn get_cfg(cli_cfg: &CliConfig) -> Result<Config, RunnerError> {
+    let workspace_dir = mantra::path::get_cargo_root()
+        .map_err(|_| RunnerError::Mantra("No workspace directory found.".to_string()))?;
+    let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
+
+    if !embedded_dir.exists() {
+        std::fs::create_dir(embedded_dir.clone()).map_err(|err| {
+            RunnerError::Setup(format!(
+                "Could not create directory '{}'. Cause: {}",
+                embedded_dir.display(),
+                err
+            ))
+        })?;
+    }
+
+    let runner_cfg = cli_cfg
+        .runner_cfg
+        .clone()
+        .unwrap_or(embedded_dir.join("runner.toml"));
+    let runner_cfg: cfg::RunnerConfig = match std::fs::read_to_string(&runner_cfg) {
+        Ok(runner_cfg) => {
+            toml::from_str(&runner_cfg).map_err(|err| RunnerError::ParsingCfg(err.to_string()))?
+        }
+        Err(_) => return Err(RunnerError::ReadingCfg(runner_cfg)),
+    };
+
+    Ok(Config {
+        runner_cfg,
+        verbose: cli_cfg.verbose,
+        workspace_dir,
+        embedded_dir,
+    })
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
@@ -38,41 +95,17 @@ pub enum RunnerError {
 
 pub const DEFAULT_RTT_PORT: u16 = 19021;
 
-pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
-    let binary_str = cli_cfg.binary.display().to_string();
-    let verbose = cli_cfg.verbose;
-    let workspace_dir = mantra::path::get_cargo_root()
-        .map_err(|_| RunnerError::Mantra("No workspace directory found.".to_string()))?;
-    let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
+pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), RunnerError> {
+    let binary_str = run_cfg.binary.display().to_string();
 
-    if !embedded_dir.exists() {
-        std::fs::create_dir(embedded_dir.clone()).map_err(|err| {
-            RunnerError::Setup(format!(
-                "Could not create directory '{}'. Cause: {}",
-                embedded_dir.display(),
-                err
-            ))
-        })?;
-    }
-
-    let runner_cfg = cli_cfg
-        .runner_cfg
-        .unwrap_or(embedded_dir.join("runner.toml"));
-    let runner_cfg: cfg::Config = match std::fs::read_to_string(&runner_cfg) {
-        Ok(runner_cfg) => {
-            toml::from_str(&runner_cfg).map_err(|err| RunnerError::ParsingCfg(err.to_string()))?
-        }
-        Err(_) => return Err(RunnerError::ReadingCfg(runner_cfg)),
-    };
-
-    if let Some(pre_command) = &runner_cfg.pre_runner {
+    if let Some(pre_command) = &main_cfg.runner_cfg.pre_runner {
         println!("--------------- Pre Runner --------------------");
         let mut args = pre_command.args.clone();
         args.push(binary_str.clone());
 
         let output = std::process::Command::new(&pre_command.name)
             .args(args)
-            .current_dir(&workspace_dir)
+            .current_dir(&main_cfg.workspace_dir)
             .output()
             .map_err(|err| RunnerError::PreRunner(err.to_string()))?;
         print!(
@@ -92,19 +125,20 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         }
     }
 
-    let gdb_script = runner_cfg
-        .gdb_script(&cli_cfg.binary)
+    let gdb_script = main_cfg
+        .runner_cfg
+        .gdb_script(&run_cfg.binary)
         .map_err(|_err| RunnerError::GdbScript(String::new()))?;
 
-    let gdb_script_file = embedded_dir.join("embedded.gdb");
+    let gdb_script_file = main_cfg.embedded_dir.join("embedded.gdb");
     std::fs::write(&gdb_script_file, gdb_script)
         .map_err(|err| RunnerError::GdbScript(err.to_string()))?;
 
     let (defmt_frames, gdb_result) = run_gdb_sequence(
-        cli_cfg.binary,
-        &workspace_dir,
+        run_cfg.binary,
+        &main_cfg.workspace_dir,
         &gdb_script_file,
-        &runner_cfg,
+        &main_cfg.runner_cfg,
     )?;
     let gdb_status = gdb_result?;
 
@@ -139,19 +173,16 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         }
     }
 
-    if let Some(mantra_cfg) = runner_cfg.mantra {
+    if let Some(mantra_cfg) = &main_cfg.runner_cfg.mantra {
         println!("------------- Mantra -------------");
 
-        let db_url = mantra_cfg.db_url.unwrap_or(format!(
-            "sqlite://{}mantra.db?mode=rwc",
-            embedded_dir.display()
-        ));
+        let db_url = mantra_db_url(mantra_cfg.db_url.clone(), &main_cfg.embedded_dir);
         let db = mantra::db::MantraDb::new(&mantra::db::Config { url: Some(db_url) })
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
-        if let Some(extract_cfg) = mantra_cfg.extract {
-            let req_changes = mantra::cmd::extract::extract(&db, &extract_cfg)
+        if let Some(extract_cfg) = &mantra_cfg.extract {
+            let req_changes = mantra::cmd::extract::extract(&db, extract_cfg)
                 .await
                 .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
@@ -161,7 +192,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
                 .map_err(|err| RunnerError::Mantra(err.to_string()))?;
             db.reset_req_generation().await;
 
-            if verbose {
+            if main_cfg.verbose {
                 println!("{req_changes}");
 
                 if let Some(deleted) = deleted_reqs {
@@ -173,7 +204,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
         let mut changes = mantra::cmd::trace::trace(
             &db,
             &mantra::cmd::trace::Config {
-                root: workspace_dir.clone(),
+                root: main_cfg.workspace_dir.clone(),
                 keep_root_absolute: false,
             },
         )
@@ -182,7 +213,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 
         let first_generation = changes.new_generation;
 
-        if let Some(extern_traces) = mantra_cfg.extern_traces {
+        if let Some(extern_traces) = &mantra_cfg.extern_traces {
             for trace_root in extern_traces {
                 match absolute_path(trace_root) {
                     Ok(abs_path) => {
@@ -212,7 +243,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
         db.reset_trace_generation().await;
 
-        if verbose {
+        if main_cfg.verbose {
             println!("{changes}");
 
             if let Some(deleted) = deleted_traces {
@@ -225,14 +256,14 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
     }
 
-    if let Some(post_command) = &runner_cfg.post_runner {
+    if let Some(post_command) = &main_cfg.runner_cfg.post_runner {
         println!("--------------- Post Runner --------------------");
         let mut args = post_command.args.clone();
         args.push(binary_str);
 
         let output = std::process::Command::new(&post_command.name)
             .args(args)
-            .current_dir(&workspace_dir)
+            .current_dir(&main_cfg.workspace_dir)
             .output()
             .map_err(|err| RunnerError::PostRunner(err.to_string()))?;
         print!(
@@ -260,7 +291,7 @@ pub fn run_gdb_sequence(
     binary: PathBuf,
     workspace_dir: &Path,
     tmp_gdb_file: &Path,
-    runner_cfg: &Config,
+    runner_cfg: &RunnerConfig,
 ) -> Result<
     (
         Vec<JsonFrame>,
@@ -345,13 +376,20 @@ pub fn run_gdb_sequence(
 
 /// Converts the given path into an cleaned absolute path.
 /// see: https://stackoverflow.com/questions/30511331/getting-the-absolute-path-from-a-pathbuf
-pub fn absolute_path(path: PathBuf) -> std::io::Result<PathBuf> {
+pub fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
     let absolute_path = if path.is_absolute() {
-        path
+        path.to_path_buf()
     } else {
         std::env::current_dir()?.join(path)
     }
     .clean();
 
     Ok(absolute_path)
+}
+
+fn mantra_db_url(url: Option<String>, embedded_dir: &Path) -> String {
+    url.unwrap_or(format!(
+        "sqlite://{}mantra.db?mode=rwc",
+        embedded_dir.display()
+    ))
 }

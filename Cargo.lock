@@ -458,6 +458,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
+ "serde",
 ]
 
 [[package]]
@@ -996,6 +997,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "defmt-json-schema",
+ "env_logger",
  "ignore",
  "log",
  "mantra-lang-tracing",
@@ -1006,6 +1008,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tera",
  "thiserror",
  "time",
  "tokio",

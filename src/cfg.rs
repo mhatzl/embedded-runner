@@ -3,17 +3,38 @@ use std::path::{Path, PathBuf};
 use object::{Object, ObjectSymbol};
 use tera::{Context, Tera};
 
-#[derive(clap::Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct CliConfig {
-    pub binary: PathBuf,
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
     #[arg(long, short = 'v')]
     pub verbose: bool,
+    #[command(subcommand)]
+    pub cmd: Cmd,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Config {
+    pub runner_cfg: RunnerConfig,
+    pub verbose: bool,
+    pub workspace_dir: PathBuf,
+    pub embedded_dir: PathBuf,
+}
+
+#[derive(Debug, Clone, clap::Parser)]
+pub enum Cmd {
+    Run(RunConfig),
+    #[command(subcommand)]
+    Mantra(mantra::cmd::Cmd),
+}
+
+#[derive(Debug, Clone, clap::Parser)]
+pub struct RunConfig {
+    pub binary: PathBuf,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct RunnerConfig {
     pub load: String,
     #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
@@ -28,7 +49,7 @@ pub struct Config {
     pub mantra: Option<MantraConfig>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct MantraConfig {
     #[serde(alias = "db-url")]
     pub db_url: Option<String>,
@@ -38,7 +59,7 @@ pub struct MantraConfig {
     pub dry_run: bool,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Command {
     pub name: String,
     pub args: Vec<String>,
@@ -52,7 +73,7 @@ pub enum CfgError {
     ResolvingLoadSection(String),
 }
 
-impl Config {
+impl RunnerConfig {
     pub fn gdb_script(&self, binary: &Path) -> Result<String, CfgError> {
         let resolved_load = resolve_load(&self.load, binary)?;
         let (rtt_address, rtt_length) = find_rtt_block(binary)?;
