@@ -230,8 +230,7 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
                         changes.merge(&mut extern_changes);
                     }
                     Err(_) => {
-                        // TODO: set log for bad extern trace root
-                        todo!()
+                        log::error!("Skipped bad extern trace root '{}'.", trace_root.display());
                     }
                 }
             }
