@@ -9,7 +9,7 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 tera = "1.19.1"
 object = "0.35.0"
-mantra = { path = "../mantra/mantra" }
+mantra = { version = "0", path = "../mantra/mantra" }
 serde = { version = "1.0.197", features = ["derive"] }
 defmt-decoder = { version = "=0.3.10", features = [
     "unstable",
