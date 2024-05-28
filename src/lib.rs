@@ -75,7 +75,7 @@ pub enum RunnerError {
     RttTimeout,
     #[error("Error from gdb: {}", .0)]
     Gdb(String),
-    #[error("Error setting up the gdp script: {}", .0)]
+    #[error("Error setting up the gdb script: {}", .0)]
     GdbScript(String),
     #[error("Error reading the runner config: {}", .0.display())]
     ReadingCfg(PathBuf),
@@ -253,6 +253,8 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
         mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &binary_str)
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+
+        println!("Updated mantra.");
     }
 
     if let Some(post_command) = &main_cfg.runner_cfg.post_runner {

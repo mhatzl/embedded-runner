@@ -1,58 +1,52 @@
-# Contributing to `<your repository name>`
+# Contributing to `embedded-runner`
 
-Thank you for considering contributing to `<your repository name>`, it means a lot to us!\
+Thank you for considering contributing to `embedded-runner`, it means a lot to us!\
 Below are the most important topics to get you started.
 
-- [Discussions](#discussions)
 - [Issue/PR Labels](#issuepr-labels)
 - [Wiki](#wiki)
 - [Development Setup](#development-setup)
 - [Commit Message Convention](#commit-message-convention)
 
-## Discussions
-
-We use [GitHub Discussions](https://github.com/mhatzl/project-repo-template/discussions) for exchanges with the community.
-It is a good place to start if you have any questions.
-
 ## Issue/PR Labels
 
 There are two labels to help possible contributors to get involved:
 
-- [good-first-issue](https://github.com/mhatzl/project-repo-template/labels/good-first-issue) ... This label is used to mark issues that should be easy to implement **without** extensive understanding of the project
-- [help-needed](https://github.com/mhatzl/project-repo-template/labels/help-needed) ... This label is used to mark issues, where project members need help to resolve it
+- [good-first-issue](https://github.com/mhatzl/embedded-runner/labels/good-first-issue) ... This label is used to mark issues that should be easy to implement **without** extensive understanding of the project
+- [help-needed](https://github.com/mhatzl/embedded-runner/labels/help-needed) ... This label is used to mark issues, where project members need help to resolve it
 
 For better asynchronous communication, we use the following labels:
 
-- [waiting-on-assignee](https://github.com/mhatzl/project-repo-template/labels/waiting-on-assignee) ... This label is used to indicate that the author or reviewer is awaiting response from the assignee
-- [waiting-on-author](https://github.com/mhatzl/project-repo-template/labels/waiting-on-author) ... This label is used to indicate that the assignee or reviewer is awaiting response from the author
-- [waiting-on-reviewer](https://github.com/mhatzl/project-repo-template/labels/waiting-on-reviewer) ... This label is used to indicate that the assignee or author is awaiting response from the reviewer
+- [waiting-on-assignee](https://github.com/mhatzl/embedded-runner/labels/waiting-on-assignee) ... This label is used to indicate that the author or reviewer is awaiting response from the assignee
+- [waiting-on-author](https://github.com/mhatzl/embedded-runner/labels/waiting-on-author) ... This label is used to indicate that the assignee or reviewer is awaiting response from the author
+- [waiting-on-reviewer](https://github.com/mhatzl/embedded-runner/labels/waiting-on-reviewer) ... This label is used to indicate that the assignee or author is awaiting response from the reviewer
 
 To keep track of feature requests, we use the following labels:
 
-- [declined](https://github.com/mhatzl/project-repo-template/labels/declined) ... This label is used to mark issues/PRs that they won't be considered/implemented further
-- [req-missing-wiki-entry](https://github.com/mhatzl/project-repo-template/labels/req-missing-wiki-entry) ... This label is used to mark `[REQ]` issues that there is not yet a related entry in the wiki
-- [req-ready](https://github.com/mhatzl/project-repo-template/labels/req-ready) ... This label is used to mark `[REQ]` issues that they have enough information to be implemented
+- [declined](https://github.com/mhatzl/embedded-runner/labels/declined) ... This label is used to mark issues/PRs that they won't be considered/implemented further
+- [req-missing-wiki-entry](https://github.com/mhatzl/embedded-runner/labels/req-missing-wiki-entry) ... This label is used to mark `[REQ]` issues that there is not yet a related entry in the wiki
+- [req-ready](https://github.com/mhatzl/embedded-runner/labels/req-ready) ... This label is used to mark `[REQ]` issues that they have enough information to be implemented
 
 ## Wiki
 
-We use the [GitHub Wiki](https://github.com/mhatzl/project-repo-template/wiki) for developer related information.
-For example, it contains project [requirements](https://github.com/mhatzl/project-repo-template/wiki/5-Requirements),
-[decision records](https://github.com/mhatzl/project-repo-template/wiki/6-Decision-Records), and [system views/models](https://github.com/mhatzl/project-repo-template/wiki/4-System-Views) of the project.
+We use the [GitHub Wiki](https://github.com/mhatzl/embedded-runner/wiki) for developer related information.
+For example, it contains project [requirements](https://github.com/mhatzl/embedded-runner/wiki/5-Requirements),
+[decision records](https://github.com/mhatzl/embedded-runner/wiki/6-Decision-Records), and [system views/models](https://github.com/mhatzl/embedded-runner/wiki/4-System-Views) of the project.
 
-**Note:** Issues for the wiki must be created in this repository, but PRs are handled in the [GitHub repository of the wiki](https://github.com/mhatzl/wiki-repo-template).  
+**Note:** Issues for the wiki must be created in this repository, but PRs are handled in the [GitHub repository of the wiki](https://github.com/mhatzl/embedded-runner-wiki).  
 
 ## Development Setup
 
-{{
+**Install:**
 
-Provide instructions on how to set up this project for development.
-
-}}
+- Rust toolchain: https://www.rust-lang.org/tools/install
+- GDB (for ARM): https://developer.arm.com/Tools%20and%20Software/GNU%20Toolchain
+- OpenOCD: https://openocd.org/pages/getting-openocd.html
 
 ## Commit Message Convention
 
 We have our own convention for git commit messages that are inspired by [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).\
-This leads to more **readable** messages that are easy to follow when looking through the [project's history](https://github.com/mhatzl/project-repo-template/commits/main).
+This leads to more **readable** messages that are easy to follow when looking through the [project's history](https://github.com/mhatzl/embedded-runner/commits/main).
 In addition, we use git commit messages to automatically get a **change log** using [release-please](https://github.com/googleapis/release-please) from Google.
 As a result, commit messages not following our convention won't appear in the generated change log.
 
@@ -96,7 +90,7 @@ The subject should contain a succinct description of the change:
 ### Breaking Changes
 
 To mark a commit as breaking change, add an exclamation mark after the commit type, i.e. `feat!: introduce some new feature`.
-Another option would be to start the footer with `BREAKING CHANGE: `, but prefer to use the exclamation mark as it is directly visible in the [project's history](https://github.com/mhatzl/project-repo-template/commits/main).
+Another option would be to start the footer with `BREAKING CHANGE: `, but prefer to use the exclamation mark as it is directly visible in the [project's history](https://github.com/mhatzl/embedded-runner/commits/main).
 
 ### Body
 
@@ -138,4 +132,4 @@ In most cases you want to set `main` as the target branch.
 The title of the PR must be written like a commit message.
 The section [commit message convention](#commit-message-convention) above describes how these messages should be written.
 
-**Note:** You must create a PR in the [wiki repository](https://github.com/mhatzl/wiki-repo-template) if you want to make changes to the wiki.
+**Note:** You must create a PR in the [wiki repository](https://github.com/mhatzl/embedded-runner-wiki) if you want to make changes to the wiki.

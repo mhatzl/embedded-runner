@@ -54,8 +54,9 @@ pub struct MantraConfig {
     #[serde(alias = "db-url")]
     pub db_url: Option<String>,
     pub extract: Option<mantra::cmd::extract::Config>,
+    #[serde(alias = "extern-traces")]
     pub extern_traces: Option<Vec<PathBuf>>,
-    #[serde(default)]
+    #[serde(default, alias = "dry-run")]
     pub dry_run: bool,
 }
 
