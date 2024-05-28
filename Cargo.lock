@@ -993,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "mantra"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "defmt-json-schema",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "mantra-lang-tracing"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "cc",
  "proc-macro2",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-macros"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "mantra-rust-procm",
  "once_cell",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-procm"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "mantra-lang-tracing",
  "proc-macro2",
@@ -1048,7 +1048,7 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-trace"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "cc",
  "mantra-lang-tracing",
