@@ -97,6 +97,13 @@ pub const DEFAULT_RTT_PORT: u16 = 19021;
 
 pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), RunnerError> {
     let binary_str = run_cfg.binary.display().to_string();
+    let rel_binary_path = run_cfg
+        .binary
+        .strip_prefix(
+            mantra::path::get_cargo_root().unwrap_or(std::env::current_dir().unwrap_or_default()),
+        )
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
 
     if let Some(pre_command) = &main_cfg.runner_cfg.pre_runner {
         println!("--------------- Pre Runner --------------------");
@@ -250,7 +257,8 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
             }
         }
 
-        mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &binary_str)
+        let test_run_name = rel_binary_path.display().to_string();
+        mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &test_run_name)
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
