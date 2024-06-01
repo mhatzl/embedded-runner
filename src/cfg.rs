@@ -33,9 +33,9 @@ pub struct RunConfig {
     pub binary: PathBuf,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Deserialize)]
 pub struct RunnerConfig {
-    pub load: String,
+    pub load: Option<String>,
     #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
     #[serde(alias = "openocd-log")]
@@ -76,7 +76,11 @@ pub enum CfgError {
 
 impl RunnerConfig {
     pub fn gdb_script(&self, binary: &Path) -> Result<String, CfgError> {
-        let resolved_load = resolve_load(&self.load, binary)?;
+        let resolved_load = if let Some(load) = &self.load {
+            resolve_load(load, binary)?
+        } else {
+            "load".to_string()
+        };
         let (rtt_address, rtt_length) = find_rtt_block(binary)?;
 
         #[cfg(target_os = "windows")]

@@ -58,7 +58,13 @@ pub fn get_cfg(cli_cfg: &CliConfig) -> Result<Config, RunnerError> {
         Ok(runner_cfg) => {
             toml::from_str(&runner_cfg).map_err(|err| RunnerError::ParsingCfg(err.to_string()))?
         }
-        Err(_) => return Err(RunnerError::ReadingCfg(runner_cfg)),
+        Err(_) => {
+            log::warn!(
+                "No runner config found at '{}'. Using default config.",
+                runner_cfg.display()
+            );
+            cfg::RunnerConfig::default()
+        }
     };
 
     Ok(Config {
