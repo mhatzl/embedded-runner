@@ -77,7 +77,12 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    args = ["echo"]
    ```
 
-4. Create and run your `defmt-test` tests
+4. Add your OpenOCD configuration
+
+   By default, `embedded-runner` will look for `.embedded/openocd.cfg`,
+   but you may change this in the runner configuration.
+
+5. Create and run your `defmt-test` tests
 
    Consult the [`defmt-test` documentation](https://crates.io/crates/defmt-test) on how to create and manage tests using the `defmt` framework.
 
