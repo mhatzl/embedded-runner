@@ -27,6 +27,10 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    ```toml
    # Optional: Load section in the gdb script.
    # 
+   # The load section gets resolved using the Tera templating language.
+   # Variables `binary_path`, `binary_filepath`, and `binary_filepath_noextension` are passed as context.
+   #
+   # e.g. "load {{ binary_filepath }}"
    load = "load"
 
    # Optional: Path to a custom OpenOCD configuration
