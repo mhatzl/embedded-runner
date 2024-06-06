@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use object::{Object, ObjectSymbol};
+use path_slash::{PathBufExt, PathExt};
 use tera::{Context, Tera};
 
 #[derive(Debug, Clone, clap::Parser)]
@@ -149,7 +150,12 @@ fn find_rtt_block(binary: &Path) -> Result<(u64, u64), CfgError> {
 fn resolve_load(load: &str, binary: &Path) -> Result<String, CfgError> {
     let mut context = Context::new();
     let parent = binary.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    context.insert("binary_path", &parent);
+    context.insert(
+        "binary_path",
+        &parent
+            .to_slash()
+            .expect("Binary path has only valid Unicode characters."),
+    );
     context.insert(
         "binary_filepath_noextension",
         &Path::join(
@@ -160,9 +166,16 @@ fn resolve_load(load: &str, binary: &Path) -> Result<String, CfgError> {
                     binary.display()
                 ))
             })?,
-        ),
+        )
+        .to_slash()
+        .expect("Binary path has only valid Unicode characters."),
     );
-    context.insert("binary_filepath", &binary);
+    context.insert(
+        "binary_filepath",
+        &binary
+            .to_slash()
+            .expect("Binary path has only valid Unicode characters."),
+    );
 
     Tera::one_off(load, &context, false).map_err(|err| {
         CfgError::ResolvingLoadSection(format!("Failed rendering the load template. Cause: {err}"))
@@ -175,32 +188,32 @@ mod test {
 
     use super::{find_rtt_block, resolve_load};
 
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn load_template() {
-        let load = "load \"{{ binary_path }}\\debug_config.ihex\"
-load \"{{ binary_filepath_noextension }}.ihex\"
-file \"{{ binary_filepath }}\"";
+    //     #[cfg(target_os = "windows")]
+    //     #[test]
+    //     fn load_template() {
+    //         let load = "load \"{{ binary_path }}\\debug_config.ihex\"
+    // load \"{{ binary_filepath_noextension }}.ihex\"
+    // file \"{{ binary_filepath }}\"";
 
-        let binary = PathBuf::from(".\\target\\debug\\hello.exe");
+    //         let binary = PathBuf::from(".\\target\\debug\\hello.exe");
 
-        let resolved = resolve_load(load, &binary).unwrap();
+    //         let resolved = resolve_load(load, &binary).unwrap();
 
-        assert!(
-            resolved.contains("target\\debug\\debug_config.ihex"),
-            "Binary path not resolved."
-        );
-        assert!(
-            resolved.contains("target\\debug\\hello.ihex"),
-            "Binary file path without extension not resolved."
-        );
-        assert!(
-            resolved.contains("target\\debug\\hello.exe"),
-            "Binary file path with extension not resolved."
-        );
-    }
+    //         assert!(
+    //             resolved.contains("target\\debug\\debug_config.ihex"),
+    //             "Binary path not resolved."
+    //         );
+    //         assert!(
+    //             resolved.contains("target\\debug\\hello.ihex"),
+    //             "Binary file path without extension not resolved."
+    //         );
+    //         assert!(
+    //             resolved.contains("target\\debug\\hello.exe"),
+    //             "Binary file path with extension not resolved."
+    //         );
+    //     }
 
-    #[cfg(not(target_os = "windows"))]
+    // #[cfg(not(target_os = "windows"))]
     #[test]
     fn load_template() {
         let load = "load \"{{ binary_path }}/debug_config.ihex\"

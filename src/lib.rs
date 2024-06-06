@@ -194,15 +194,18 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
             .await
             .map_err(|err| RunnerError::Mantra(err.to_string()))?;
 
-        if let Some(extract_cfg) = &mantra_cfg.extract {
-            let req_changes = mantra::cmd::extract::extract(&db, extract_cfg)
+        if let Some(mut extract_cfg) = mantra_cfg.extract.clone() {
+            extract_cfg.root = absolute_path(&extract_cfg.root)
+                .expect("Either Cargo workspace or current directory must exist.");
+
+            let req_changes = mantra::cmd::extract::extract(&db, &extract_cfg)
                 .await
-                .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+                .map_err(|err| RunnerError::Mantra(format!("extract: {}", err)))?;
 
             let deleted_reqs = db
                 .delete_req_generations(req_changes.new_generation)
                 .await
-                .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+                .map_err(|err| RunnerError::Mantra(format!("extract: {}", err)))?;
             db.reset_req_generation().await;
 
             if main_cfg.verbose {
@@ -222,7 +225,7 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
             },
         )
         .await
-        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+        .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
 
         let first_generation = changes.new_generation;
 
@@ -238,7 +241,7 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
                             },
                         )
                         .await
-                        .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+                        .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
 
                         changes.merge(&mut extern_changes);
                     }
@@ -252,7 +255,7 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
         let deleted_traces = db
             .delete_trace_generations(first_generation)
             .await
-            .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+            .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
         db.reset_trace_generation().await;
 
         if main_cfg.verbose {
@@ -266,7 +269,7 @@ pub async fn run_cmd(main_cfg: &Config, run_cfg: RunConfig) -> Result<(), Runner
         let test_run_name = rel_binary_path.display().to_string();
         mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &test_run_name)
             .await
-            .map_err(|err| RunnerError::Mantra(err.to_string()))?;
+            .map_err(|err| RunnerError::Mantra(format!("coverage: {}", err)))?;
 
         println!("Updated mantra.");
     }
@@ -395,7 +398,9 @@ pub fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
     let absolute_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()?.join(path)
+        mantra::path::get_cargo_root()
+            .or_else(|_| std::env::current_dir())?
+            .join(path)
     }
     .clean();
 
