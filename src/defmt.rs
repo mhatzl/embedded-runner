@@ -111,7 +111,7 @@ pub fn location_info(
 
     if let Some(Some(loc)) = loc {
         // try to get the relative path from workspace root, else the full one
-        let path = mantra::db::get_relative_path(workspace_root, &loc.file)
+        let path = mantra_lang_tracing::path::make_relative(&loc.file, workspace_root)
             .unwrap_or(loc.file.to_path_buf());
 
         file = Some(path.display().to_string());

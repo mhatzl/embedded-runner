@@ -15,22 +15,71 @@ pub struct CliConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct ResolvedConfig {
     pub runner_cfg: RunnerConfig,
     pub verbose: bool,
     pub workspace_dir: PathBuf,
     pub embedded_dir: PathBuf,
 }
 
-#[derive(Debug, Clone, clap::Parser)]
-pub enum Cmd {
-    Run(RunConfig),
-    #[command(subcommand)]
-    Mantra(mantra::cmd::Cmd),
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("{}", .0)]
+    Path(#[from] crate::path::PathError),
+    #[error("{}", .0)]
+    Fs(#[from] std::io::Error),
+    #[error("{}", .0)]
+    DeToml(#[from] toml::de::Error),
+}
+
+pub fn get_cfg(cli_cfg: &CliConfig) -> Result<ResolvedConfig, ConfigError> {
+    let workspace_dir = crate::path::get_cargo_root()?;
+    let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
+
+    if !embedded_dir.exists() {
+        std::fs::create_dir(embedded_dir.clone())?;
+    }
+
+    let runner_cfg = cli_cfg
+        .runner_cfg
+        .clone()
+        .unwrap_or(embedded_dir.join("runner.toml"));
+    let runner_cfg: RunnerConfig = match std::fs::read_to_string(&runner_cfg) {
+        Ok(runner_cfg) => toml::from_str(&runner_cfg)?,
+        Err(_) => {
+            log::warn!(
+                "No runner config found at '{}'. Using default config.",
+                runner_cfg.display()
+            );
+            RunnerConfig::default()
+        }
+    };
+
+    Ok(ResolvedConfig {
+        runner_cfg,
+        verbose: cli_cfg.verbose,
+        workspace_dir,
+        embedded_dir,
+    })
 }
 
 #[derive(Debug, Clone, clap::Parser)]
-pub struct RunConfig {
+pub enum Cmd {
+    Run(RunCmdConfig),
+    // #[command(subcommand)]
+    // Mantra(mantra::cmd::Cmd),
+}
+
+#[derive(Debug, Clone, clap::Parser)]
+pub struct RunCmdConfig {
+    #[arg(long)]
+    pub run_name: Option<String>,
+    #[arg(long)]
+    pub output_dir: Option<PathBuf>,
+    /// Path to look for JSON metadata that is linked with the test run.
+    /// The default is to look for the file at `.embedded/meta.json`.
+    #[arg(long)]
+    pub meta_filepath: Option<PathBuf>,
     pub binary: PathBuf,
 }
 
@@ -39,27 +88,27 @@ pub struct RunnerConfig {
     pub load: Option<String>,
     #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
-    #[serde(alias = "openocd-log")]
-    pub openocd_log: Option<PathBuf>,
+    #[serde(alias = "gdb-logfile")]
+    pub gdb_logfile: Option<PathBuf>,
     #[serde(alias = "pre-runner")]
     pub pre_runner: Option<Command>,
     #[serde(alias = "post-runner")]
     pub post_runner: Option<Command>,
     #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
-    pub mantra: Option<MantraConfig>,
+    // pub mantra: Option<MantraConfig>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct MantraConfig {
-    #[serde(alias = "db-url")]
-    pub db_url: Option<String>,
-    pub extract: Option<mantra::cmd::extract::Config>,
-    #[serde(alias = "extern-traces")]
-    pub extern_traces: Option<Vec<PathBuf>>,
-    #[serde(default, alias = "dry-run")]
-    pub dry_run: bool,
-}
+// #[derive(Debug, Clone, serde::Deserialize)]
+// pub struct MantraConfig {
+//     #[serde(alias = "db-url")]
+//     pub db_url: Option<String>,
+//     pub extract: Option<mantra::cmd::extract::Config>,
+//     #[serde(alias = "extern-traces")]
+//     pub extern_traces: Option<Vec<PathBuf>>,
+//     #[serde(default, alias = "dry-run")]
+//     pub dry_run: bool,
+// }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Command {
@@ -76,7 +125,7 @@ pub enum CfgError {
 }
 
 impl RunnerConfig {
-    pub fn gdb_script(&self, binary: &Path) -> Result<String, CfgError> {
+    pub fn gdb_script(&self, binary: &Path, output_dir: &Path) -> Result<String, CfgError> {
         let resolved_load = if let Some(load) = &self.load {
             resolve_load(load, binary)?
         } else {
@@ -112,14 +161,16 @@ shell {sleep_cmd} 1
 
 quit        
 ",
-            self.openocd_log
+            self.gdb_logfile
                 .clone()
-                .unwrap_or(PathBuf::from(".embedded/openocd.log"))
-                .to_string_lossy(),
+                .unwrap_or(output_dir.join("gdb.log"))
+                .to_slash()
+                .expect("GDB logfile must be a valid filepath."),
             self.openocd_cfg
                 .clone()
                 .unwrap_or(PathBuf::from(".embedded/openocd.cfg"))
-                .to_string_lossy(),
+                .to_slash()
+                .expect("OpenOCD configuration file must be a valid filepath."),
             resolved_load,
             rtt_address,
             rtt_length,

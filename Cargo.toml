@@ -11,8 +11,12 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 tera = "1.19.1"
 object = "0.35.0"
-mantra = { version = "0", path = "../mantra/mantra" }
+mantra-schema = { version = "0", path = "../mantra/schema" }
+mantra-lang-tracing = { path = "../mantra/langs/mantra-lang-tracing", version = "0" }
+mantra-rust-macros = { version = "0", path = "../mantra/langs/rust/mantra-rust-macros", features = ["extract"] }
+#mantra = { version = "0", path = "../mantra/mantra" }
 serde = { version = "1.0.197", features = ["derive"] }
+serde_json = { version = "1.0" }
 defmt-decoder = { version = "=0.3.10", features = [
     "unstable",
 ] }
@@ -26,3 +30,4 @@ env_logger = "0.11.3"
 thiserror = "1.0.59"
 path-clean = "1.0.1"
 path-slash = "0.2.1"
+regex = "1.10.4"
