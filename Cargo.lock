@@ -1023,6 +1023,7 @@ dependencies = [
  "cc",
  "proc-macro2",
  "regex",
+ "serde",
  "tree-sitter",
  "tree-sitter-rust",
 ]
