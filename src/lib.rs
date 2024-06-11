@@ -12,6 +12,7 @@ use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub mod cfg;
+pub mod collect;
 pub mod coverage;
 pub mod defmt;
 pub mod path;
@@ -19,9 +20,6 @@ pub mod path;
 pub const DEFAULT_RTT_PORT: u16 = 19021;
 
 pub const TIMEOUT_SEC: u64 = 15;
-
-/// Path to text file containing fielpaths to all generated coverage files since last `collect`.
-pub const COVERAGES_PATH: &str = "target/coverages.txt";
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
@@ -31,16 +29,10 @@ pub enum RunnerError {
     Gdb(String),
     #[error("Error setting up the gdb script: {}", .0)]
     GdbScript(String),
-    // #[error("Error reading the runner config: {}", .0.display())]
-    // ReadingCfg(PathBuf),
-    // #[error("Error parsing the runner config: {}", .0)]
-    // ParsingCfg(String),
     #[error("{}", .0)]
     Config(#[from] cfg::ConfigError),
     #[error("Error reading defmt logs: {}", .0)]
     Defmt(String),
-    #[error("Error adding coverage data to mantra: {}", .0)]
-    Mantra(String),
     #[error("Failed setting up embedded-runner. Cause: {}", .0)]
     Setup(String),
     #[error("Failed executing pre runner. Cause: {}", .0)]
@@ -56,21 +48,7 @@ pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
 
     match cli_cfg.cmd {
         cfg::Cmd::Run(run_cfg) => run_cmd(&cfg, run_cfg).await,
-        // cfg::Cmd::Mantra(mantra_cmd) => {
-        //     let mantra_cfg = mantra::cfg::Config {
-        //         db: mantra::db::Config {
-        //             url: Some(mantra_db_url(
-        //                 cfg.runner_cfg.mantra.and_then(|m| m.db_url),
-        //                 &cfg.embedded_dir,
-        //             )),
-        //         },
-        //         cmd: mantra_cmd.clone(),
-        //     };
-
-        //     mantra::run(mantra_cfg)
-        //         .await
-        //         .map_err(|err| RunnerError::Mantra(err.to_string()))
-        // }
+        cfg::Cmd::Collect(collect_cfg) => collect::run(collect_cfg).await,
     }
 }
 
@@ -189,11 +167,6 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
             )
             .await;
         let _ = writer.write_all("\n".as_bytes()).await;
-        // let _ = writeln!(
-        //     &mut writer,
-        //     "{}",
-        //     serde_json::to_string(frame).expect("DefmtFrame is valid JSON.")
-        // );
 
         let location = if frame.location.file.is_some()
             && frame.location.line.is_some()
@@ -281,23 +254,37 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     println!("Coverage written to '{}'.", coverage_file.display());
 
-    let coverages_filepath = path::get_cargo_root().map_or(
-        std::env::current_dir().expect("Current directory must always exist."),
-        |p| p.join(PathBuf::from(COVERAGES_PATH)),
-    );
+    let coverages_filepath = coverage::coverages_filepath();
 
     if !coverages_filepath.exists() {
         let _ = tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
     } else {
         let mut file = tokio::fs::OpenOptions::new()
             .append(true)
+            .read(true)
             .open(coverages_filepath)
             .await
             .expect("Coverages file exists.");
-        let _ = file.write_all("\n".as_bytes()).await;
-        let _ = file
-            .write_all(coverage_file.display().to_string().as_bytes())
-            .await;
+
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .await
+            .expect("Reading coverages");
+
+        let mut exists = false;
+        for line in content.lines() {
+            if line == coverage_file.display().to_string() {
+                exists = true;
+                break;
+            }
+        }
+
+        if !exists {
+            let _ = file.write_all("\n".as_bytes()).await;
+            let _ = file
+                .write_all(coverage_file.display().to_string().as_bytes())
+                .await;
+        }
     }
 
     if let Some(post_command) = &main_cfg.runner_cfg.post_runner {

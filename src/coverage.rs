@@ -22,11 +22,21 @@ pub enum CoverageError {
     Match(String),
 }
 
+/// Path to text file containing fielpaths to all generated coverage files since last `collect`.
+pub const COVERAGES_PATH: &str = "target/coverages.txt";
+
+pub fn coverages_filepath() -> PathBuf {
+    crate::path::get_cargo_root().map_or(
+        std::env::current_dir().expect("Current directory must always exist."),
+        |p| p.join(PathBuf::from(COVERAGES_PATH)),
+    )
+}
+
 pub fn coverage_from_defmt_frames(
     run_name: String,
     meta: Option<serde_json::Value>,
     frames: &[DefmtFrame],
-    log_file: Option<PathBuf>,
+    logs: Option<String>,
 ) -> Result<CoverageSchema, CoverageError> {
     if frames.is_empty() {
         return Err(CoverageError::NoTests);
@@ -44,7 +54,7 @@ pub fn coverage_from_defmt_frames(
         name: run_name,
         date,
         meta,
-        log_file,
+        logs,
         tests: Vec::new(),
         nr_of_tests: 0,
     };

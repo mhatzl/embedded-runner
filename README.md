@@ -37,33 +37,10 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    openocd-cfg = ".embedded/openocd.cfg"
 
    # Optional: Path to write OpenOCD logs to
-   openocd-log = ".embedded/openocd.log"
+   gdb-logfile = "<output directory>/gdb.log"
 
    # Optional: RTT port to use
    rtt-port = 19021
-
-   # Enables *mantra*
-   [mantra]
-
-   # Optional: The URL to connect to the *mantra* database
-   db-url = "sqlite://.embedded/mantra.db?mode=rwc"
-
-   # Optional: Includes traces outside the working directory
-   extern_traces = ["../../crate-dep-test"]
-
-
-   # Optional: Settings to automatically extract requirements
-   [mantra.extract]
-
-   # Path to look for requirements
-   root = "../reqs.md"
-
-   link = "local"
-
-   # Kind of origin to extract requirements from.
-   # Currently only "GitHub" is supported
-   origin = "GitHub"
-
 
    # Optional: Define a command to run before the runner executes the binary.
    # A 'post-runner' may also be set that is run after executing the binary.
@@ -85,6 +62,11 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
 5. Create and run your `defmt-test` tests
 
    Consult the [`defmt-test` documentation](https://crates.io/crates/defmt-test) on how to create and manage tests using the `defmt` framework.
+
+6. Optional: Collect test results from multiple test runs
+
+   Run `embedded-runner collect <output filepath>` to combine all test run results into one file.
+   The content will be JSON adhering to the [mantra `CoverageSchema`](https://github.com/mhatzl/mantra).
 
 # License
 

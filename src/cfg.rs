@@ -66,8 +66,7 @@ pub fn get_cfg(cli_cfg: &CliConfig) -> Result<ResolvedConfig, ConfigError> {
 #[derive(Debug, Clone, clap::Parser)]
 pub enum Cmd {
     Run(RunCmdConfig),
-    // #[command(subcommand)]
-    // Mantra(mantra::cmd::Cmd),
+    Collect(CollectCmdConfig),
 }
 
 #[derive(Debug, Clone, clap::Parser)]
@@ -81,6 +80,11 @@ pub struct RunCmdConfig {
     #[arg(long)]
     pub meta_filepath: Option<PathBuf>,
     pub binary: PathBuf,
+}
+
+#[derive(Debug, Clone, clap::Parser)]
+pub struct CollectCmdConfig {
+    pub output: Option<PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, serde::Deserialize)]
