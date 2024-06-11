@@ -1,7 +1,6 @@
 use std::{
-    io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -10,6 +9,7 @@ use coverage::CoverageError;
 use defmt_json_schema::v1::JsonFrame;
 use path_clean::PathClean;
 use serde_json::json;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub mod cfg;
 pub mod coverage;
@@ -17,6 +17,11 @@ pub mod defmt;
 pub mod path;
 
 pub const DEFAULT_RTT_PORT: u16 = 19021;
+
+pub const TIMEOUT_SEC: u64 = 15;
+
+/// Path to text file containing fielpaths to all generated coverage files since last `collect`.
+pub const COVERAGES_PATH: &str = "target/coverages.txt";
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
@@ -87,22 +92,18 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     };
 
     if !output_dir.exists() {
-        std::fs::create_dir_all(&output_dir).map_err(|err| {
-            RunnerError::Setup(format!(
-                "Could not create directory '{}'. Cause: {}",
-                output_dir.display(),
-                err
-            ))
-        })?;
+        tokio::fs::create_dir_all(&output_dir)
+            .await
+            .map_err(|err| {
+                RunnerError::Setup(format!(
+                    "Could not create directory '{}'. Cause: {}",
+                    output_dir.display(),
+                    err
+                ))
+            })?;
     }
 
     let log_filepath = output_dir.join("defmt.log");
-    let rel_log_filepath = log_filepath
-        .strip_prefix(
-            crate::path::get_cargo_root().unwrap_or(std::env::current_dir().unwrap_or_default()),
-        )
-        .map(|p| p.to_path_buf())
-        .unwrap_or(log_filepath.clone());
 
     let binary_str = run_cfg.binary.display().to_string();
     let rel_binary_path = run_cfg
@@ -119,10 +120,11 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         let mut args = pre_command.args.clone();
         args.push(binary_str.clone());
 
-        let output = std::process::Command::new(&pre_command.name)
+        let output = tokio::process::Command::new(&pre_command.name)
             .args(args)
             .current_dir(&main_cfg.workspace_dir)
             .output()
+            .await
             .map_err(|err| RunnerError::PreRunner(err.to_string()))?;
         print!(
             "{}",
@@ -147,7 +149,8 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         .map_err(|_err| RunnerError::GdbScript(String::new()))?;
 
     let gdb_script_file = output_dir.join("embedded.gdb");
-    std::fs::write(&gdb_script_file, gdb_script)
+    tokio::fs::write(&gdb_script_file, gdb_script)
+        .await
         .map_err(|err| RunnerError::GdbScript(err.to_string()))?;
 
     let (defmt_frames, gdb_result) = run_gdb_sequence(
@@ -155,7 +158,8 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         &main_cfg.workspace_dir,
         &gdb_script_file,
         &main_cfg.runner_cfg,
-    )?;
+    )
+    .await?;
     let gdb_status = gdb_result?;
 
     if !gdb_status.success() {
@@ -165,21 +169,31 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     }
 
     println!("--------------- Logs --------------------");
-    let log_file = std::fs::File::create(&log_filepath).map_err(|err| {
-        RunnerError::Setup(format!(
-            "Could not create file '{}'. Cause: {}",
-            log_filepath.display(),
-            err
-        ))
-    })?;
-    let mut writer = BufWriter::new(&log_file);
+    let log_file = tokio::fs::File::create(&log_filepath)
+        .await
+        .map_err(|err| {
+            RunnerError::Setup(format!(
+                "Could not create file '{}'. Cause: {}",
+                log_filepath.display(),
+                err
+            ))
+        })?;
+    let mut writer = BufWriter::new(log_file);
 
     for frame in &defmt_frames {
-        let _ = writeln!(
-            &mut writer,
-            "{}",
-            serde_json::to_string(frame).expect("DefmtFrame is valid JSON.")
-        );
+        let _ = writer
+            .write_all(
+                serde_json::to_string(frame)
+                    .expect("DefmtFrame is valid JSON.")
+                    .as_bytes(),
+            )
+            .await;
+        let _ = writer.write_all("\n".as_bytes()).await;
+        // let _ = writeln!(
+        //     &mut writer,
+        //     "{}",
+        //     serde_json::to_string(frame).expect("DefmtFrame is valid JSON.")
+        // );
 
         let location = if frame.location.file.is_some()
             && frame.location.line.is_some()
@@ -216,7 +230,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
 
     let meta = if meta_path.exists() {
-        let meta_content = std::fs::read_to_string(&meta_path).map_err(|err| {
+        let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|err| {
             RunnerError::Setup(format!(
                 "Could not read metadata '{}'. Cause: {}",
                 meta_path.display(),
@@ -245,19 +259,18 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         })
     };
 
-    let coverage = coverage::coverage_from_defmt_frames(
-        run_name,
-        Some(meta),
-        &defmt_frames,
-        Some(rel_log_filepath),
-    )
-    .map_err(RunnerError::Coverage)?;
+    let logs = serde_json::to_string(&defmt_frames).expect("DefmtFrames were deserialized before.");
+
+    let coverage =
+        coverage::coverage_from_defmt_frames(run_name, Some(meta), &defmt_frames, Some(logs))
+            .map_err(RunnerError::Coverage)?;
 
     let coverage_file = output_dir.join("coverage.json");
-    std::fs::write(
+    tokio::fs::write(
         &coverage_file,
         serde_json::to_string(&coverage).expect("Coverage schema is valid JSON."),
     )
+    .await
     .map_err(|err| {
         RunnerError::Setup(format!(
             "Could not write to file '{}'. Cause: {}",
@@ -268,103 +281,35 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     println!("Coverage written to '{}'.", coverage_file.display());
 
-    // if let Some(mantra_cfg) = &main_cfg.runner_cfg.mantra {
-    //     println!("------------- Mantra -------------");
+    let coverages_filepath = path::get_cargo_root().map_or(
+        std::env::current_dir().expect("Current directory must always exist."),
+        |p| p.join(PathBuf::from(COVERAGES_PATH)),
+    );
 
-    //     let db_url = mantra_db_url(mantra_cfg.db_url.clone(), &main_cfg.embedded_dir);
-    //     let db = mantra::db::MantraDb::new(&mantra::db::Config { url: Some(db_url) })
-    //         .await
-    //         .map_err(|err| RunnerError::Mantra(err.to_string()))?;
-
-    //     if let Some(mut extract_cfg) = mantra_cfg.extract.clone() {
-    //         extract_cfg.root = absolute_path(&extract_cfg.root)
-    //             .expect("Either Cargo workspace or current directory must exist.");
-
-    //         let req_changes = mantra::cmd::extract::extract(&db, &extract_cfg)
-    //             .await
-    //             .map_err(|err| RunnerError::Mantra(format!("extract: {}", err)))?;
-
-    //         let deleted_reqs = db
-    //             .delete_req_generations(req_changes.new_generation)
-    //             .await
-    //             .map_err(|err| RunnerError::Mantra(format!("extract: {}", err)))?;
-    //         db.reset_req_generation().await;
-
-    //         if main_cfg.verbose {
-    //             println!("{req_changes}");
-
-    //             if let Some(deleted) = deleted_reqs {
-    //                 println!("{deleted}");
-    //             }
-    //         }
-    //     }
-
-    //     let mut changes = mantra::cmd::trace::trace(
-    //         &db,
-    //         &mantra::cmd::trace::Config {
-    //             root: main_cfg.workspace_dir.clone(),
-    //             keep_root_absolute: false,
-    //         },
-    //     )
-    //     .await
-    //     .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
-
-    //     let first_generation = changes.new_generation;
-
-    //     if let Some(extern_traces) = &mantra_cfg.extern_traces {
-    //         for trace_root in extern_traces {
-    //             match absolute_path(trace_root) {
-    //                 Ok(abs_path) => {
-    //                     let mut extern_changes = mantra::cmd::trace::trace(
-    //                         &db,
-    //                         &mantra::cmd::trace::Config {
-    //                             root: abs_path,
-    //                             keep_root_absolute: true,
-    //                         },
-    //                     )
-    //                     .await
-    //                     .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
-
-    //                     changes.merge(&mut extern_changes);
-    //                 }
-    //                 Err(_) => {
-    //                     log::error!("Skipped bad extern trace root '{}'.", trace_root.display());
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     let deleted_traces = db
-    //         .delete_trace_generations(first_generation)
-    //         .await
-    //         .map_err(|err| RunnerError::Mantra(format!("trace: {}", err)))?;
-    //     db.reset_trace_generation().await;
-
-    //     if main_cfg.verbose {
-    //         println!("{changes}");
-
-    //         if let Some(deleted) = deleted_traces {
-    //             println!("{deleted}");
-    //         }
-    //     }
-
-    //     let test_run_name = rel_binary_path.display().to_string();
-    //     mantra::cmd::coverage::coverage_from_defmt_frames(&defmt_frames, &db, &test_run_name)
-    //         .await
-    //         .map_err(|err| RunnerError::Mantra(format!("coverage: {}", err)))?;
-
-    //     println!("Updated mantra.");
-    // }
+    if !coverages_filepath.exists() {
+        let _ = tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
+    } else {
+        let mut file = tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(coverages_filepath)
+            .await
+            .expect("Coverages file exists.");
+        let _ = file.write_all("\n".as_bytes()).await;
+        let _ = file
+            .write_all(coverage_file.display().to_string().as_bytes())
+            .await;
+    }
 
     if let Some(post_command) = &main_cfg.runner_cfg.post_runner {
         println!("--------------- Post Runner --------------------");
         let mut args = post_command.args.clone();
         args.push(binary_str);
 
-        let output = std::process::Command::new(&post_command.name)
+        let output = tokio::process::Command::new(&post_command.name)
             .args(args)
             .current_dir(&main_cfg.workspace_dir)
             .output()
+            .await
             .map_err(|err| RunnerError::PostRunner(err.to_string()))?;
         print!(
             "{}",
@@ -386,8 +331,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     Ok(())
 }
 
-#[inline]
-pub fn run_gdb_sequence(
+pub async fn run_gdb_sequence(
     binary: PathBuf,
     workspace_dir: &Path,
     tmp_gdb_file: &Path,
@@ -399,7 +343,7 @@ pub fn run_gdb_sequence(
     ),
     RunnerError,
 > {
-    let mut gdb_cmd = Command::new("arm-none-eabi-gdb");
+    let mut gdb_cmd = tokio::process::Command::new("arm-none-eabi-gdb");
     let mut gdb = gdb_cmd
         .args([
             "-x",
@@ -417,10 +361,15 @@ pub fn run_gdb_sequence(
     let mut buf = [0; 100];
     let mut content = Vec::new();
     let rtt_start = b"for rtt connection";
+    let mut rtt_found = false;
 
     println!("--------------- OpenOCD --------------------");
-    let start = std::time::Instant::now();
-    'outer: while let Ok(n) = open_ocd_output.read(&mut buf) {
+    'outer: while let Ok(Ok(n)) = tokio::time::timeout(
+        std::time::Duration::from_secs(TIMEOUT_SEC),
+        open_ocd_output.read(&mut buf),
+    )
+    .await
+    {
         if n > 0 {
             content.extend_from_slice(&buf[..n]);
 
@@ -429,20 +378,19 @@ pub fn run_gdb_sequence(
             for i in 0..n {
                 let slice_end = content.len().saturating_sub(i);
                 if content[..slice_end].ends_with(rtt_start) {
+                    rtt_found = true;
                     break 'outer;
                 }
             }
-        } else if std::time::Instant::now()
-            .checked_duration_since(start)
-            .unwrap()
-            .as_millis()
-            > 12000
-        {
-            log::error!("Timeout while waiting for rtt connection.");
-            let _ = gdb.kill();
-            return Err(RunnerError::RttTimeout);
         }
     }
+
+    if !rtt_found {
+        log::error!("Timeout while waiting for rtt connection.");
+        let _ = gdb.kill().await;
+        return Err(RunnerError::RttTimeout);
+    }
+
     println!();
 
     // start defmt thread + end-signal
@@ -450,48 +398,30 @@ pub fn run_gdb_sequence(
     let thread_signal = end_signal.clone();
     let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
     let workspace_root = workspace_dir.to_path_buf();
-    let defmt_thread = std::thread::spawn(move || {
+    let defmt_thread = tokio::spawn(async move {
         defmt::read_defmt_frames(&binary, &workspace_root, rtt_port, thread_signal)
     });
 
     // wait for gdb to end
-    let start = std::time::Instant::now();
-    let gdb_result;
-
-    loop {
-        match gdb.try_wait() {
-            Ok(Some(exit_code)) => {
-                gdb_result = Ok(exit_code);
-                break;
+    let gdb_result =
+        match tokio::time::timeout(std::time::Duration::from_secs(TIMEOUT_SEC), gdb.wait()).await {
+            Ok(Ok(status)) => Ok(status),
+            Ok(Err(err)) => Err(RunnerError::Gdb(format!(
+                "Error waiting for gdb to finish. Cause: {err}"
+            ))),
+            Err(_) => {
+                log::error!("Timeout while waiting for gdb to end.");
+                let _ = gdb.kill().await;
+                return Err(RunnerError::RttTimeout);
             }
-            Ok(None) => {
-                if std::time::Instant::now()
-                    .checked_duration_since(start)
-                    .unwrap()
-                    .as_millis()
-                    > 12000
-                {
-                    log::error!("Timeout while waiting for rtt connection.");
-                    let _ = gdb.kill();
-                    return Err(RunnerError::RttTimeout);
-                }
-            }
-            Err(err) => {
-                gdb_result = Err(RunnerError::Gdb(format!(
-                    "Error waiting for gdb to finish. Cause: {err}"
-                )));
-                break;
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
+        };
 
     // signal defmt end
     end_signal.store(true, std::sync::atomic::Ordering::Relaxed);
 
     // join defmt thread to get logs
     let defmt_result = defmt_thread
-        .join()
+        .await
         .map_err(|_| RunnerError::Defmt("Failed waiting for defmt logs.".to_string()))?;
 
     // print logs
@@ -515,10 +445,3 @@ pub fn absolute_path(path: &Path) -> std::io::Result<PathBuf> {
 
     Ok(absolute_path)
 }
-
-// fn mantra_db_url(url: Option<String>, embedded_dir: &Path) -> String {
-//     url.unwrap_or(format!(
-//         "sqlite://{}mantra.db?mode=rwc",
-//         embedded_dir.display()
-//     ))
-// }
