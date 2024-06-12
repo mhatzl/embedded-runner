@@ -100,19 +100,7 @@ pub struct RunnerConfig {
     pub post_runner: Option<Command>,
     #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
-    // pub mantra: Option<MantraConfig>,
 }
-
-// #[derive(Debug, Clone, serde::Deserialize)]
-// pub struct MantraConfig {
-//     #[serde(alias = "db-url")]
-//     pub db_url: Option<String>,
-//     pub extract: Option<mantra::cmd::extract::Config>,
-//     #[serde(alias = "extern-traces")]
-//     pub extern_traces: Option<Vec<PathBuf>>,
-//     #[serde(default, alias = "dry-run")]
-//     pub dry_run: bool,
-// }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Command {
@@ -243,32 +231,6 @@ mod test {
 
     use super::{find_rtt_block, resolve_load};
 
-    //     #[cfg(target_os = "windows")]
-    //     #[test]
-    //     fn load_template() {
-    //         let load = "load \"{{ binary_path }}\\debug_config.ihex\"
-    // load \"{{ binary_filepath_noextension }}.ihex\"
-    // file \"{{ binary_filepath }}\"";
-
-    //         let binary = PathBuf::from(".\\target\\debug\\hello.exe");
-
-    //         let resolved = resolve_load(load, &binary).unwrap();
-
-    //         assert!(
-    //             resolved.contains("target\\debug\\debug_config.ihex"),
-    //             "Binary path not resolved."
-    //         );
-    //         assert!(
-    //             resolved.contains("target\\debug\\hello.ihex"),
-    //             "Binary file path without extension not resolved."
-    //         );
-    //         assert!(
-    //             resolved.contains("target\\debug\\hello.exe"),
-    //             "Binary file path with extension not resolved."
-    //         );
-    //     }
-
-    // #[cfg(not(target_os = "windows"))]
     #[test]
     fn load_template() {
         let load = "load \"{{ binary_path }}/debug_config.ihex\"

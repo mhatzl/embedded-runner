@@ -19,6 +19,10 @@ pub enum DefmtError {
     TcpError(String),
     #[error("TCP connection error: {}", .0)]
     TcpConnect(String),
+    #[error("Failed reading binary. Cause: {}", .0)]
+    ReadBinary(std::io::Error),
+    #[error("Missing defmt data in given binary.")]
+    MissingDefmt,
 }
 
 pub fn read_defmt_frames(
@@ -27,9 +31,13 @@ pub fn read_defmt_frames(
     tcp_port: u16,
     end_signal: Arc<AtomicBool>,
 ) -> Result<Vec<JsonFrame>, DefmtError> {
-    let bytes = std::fs::read(binary).unwrap(); //?;
-    let table = Table::parse(&bytes).unwrap().unwrap(); //?.ok_or_else(|| anyhow!(".defmt data not found"))?;
-    let locs = table.get_locations(&bytes).unwrap(); //?;
+    let bytes = std::fs::read(binary).map_err(DefmtError::ReadBinary)?;
+    let table = Table::parse(&bytes)
+        .map_err(|_| DefmtError::MissingDefmt)?
+        .ok_or(DefmtError::MissingDefmt)?;
+    let locs = table
+        .get_locations(&bytes)
+        .map_err(|_| DefmtError::MissingDefmt)?;
 
     // check if the locations info contains all the indicies
     let locs = if table.indices().all(|idx| locs.contains_key(&(idx as u64))) {
