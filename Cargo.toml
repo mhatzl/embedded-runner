@@ -14,7 +14,6 @@ object = "0.35.0"
 mantra-schema = { version = "0", path = "../mantra/schema" }
 mantra-lang-tracing = { path = "../mantra/langs/mantra-lang-tracing", version = "0" }
 mantra-rust-macros = { version = "0", path = "../mantra/langs/rust/mantra-rust-macros", features = ["extract"] }
-#mantra = { version = "0", path = "../mantra/mantra" }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0" }
 defmt-decoder = { version = "=0.3.10", features = [
