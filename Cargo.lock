@@ -406,7 +406,7 @@ checksum = "440d59c0c6d96354061909b4769b2ca03868dbaee203e7b779d9021ebbde3058"
 
 [[package]]
 name = "embedded-runner"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "clap",
  "defmt-decoder",
