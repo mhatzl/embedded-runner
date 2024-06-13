@@ -96,8 +96,12 @@ pub struct RunnerConfig {
     pub gdb_logfile: Option<PathBuf>,
     #[serde(alias = "pre-runner")]
     pub pre_runner: Option<Command>,
+    #[serde(alias = "pre-runner-windows")]
+    pub pre_runner_windows: Option<Command>,
     #[serde(alias = "post-runner")]
     pub post_runner: Option<Command>,
+    #[serde(alias = "post-runner-windows")]
+    pub post_runner_windows: Option<Command>,
     #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
 }

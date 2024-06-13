@@ -93,7 +93,16 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         .unwrap_or(run_cfg.binary.clone());
     let rel_binary_str = rel_binary_path.display().to_string();
 
-    if let Some(pre_command) = &main_cfg.runner_cfg.pre_runner {
+    #[cfg(target_os = "windows")]
+    let pre_command = main_cfg
+        .runner_cfg
+        .pre_runner_windows
+        .as_ref()
+        .or(main_cfg.runner_cfg.pre_runner.as_ref());
+    #[cfg(not(target_os = "windows"))]
+    let pre_command = main_cfg.runner_cfg.pre_runner.as_ref();
+
+    if let Some(pre_command) = pre_command {
         println!("--------------- Pre Runner --------------------");
         let mut args = pre_command.args.clone();
         args.push(binary_str.clone());
@@ -287,7 +296,16 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         }
     }
 
-    if let Some(post_command) = &main_cfg.runner_cfg.post_runner {
+    #[cfg(target_os = "windows")]
+    let post_command = main_cfg
+        .runner_cfg
+        .post_runner_windows
+        .as_ref()
+        .or(main_cfg.runner_cfg.post_runner.as_ref());
+    #[cfg(not(target_os = "windows"))]
+    let post_command = main_cfg.runner_cfg.post_runner.as_ref();
+
+    if let Some(post_command) = post_command {
         println!("--------------- Post Runner --------------------");
         let mut args = post_command.args.clone();
         args.push(binary_str);

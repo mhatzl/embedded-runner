@@ -42,6 +42,9 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
 
    # Optional: Define a command to run before the runner executes the binary.
    # A 'post-runner' may also be set that is run after executing the binary.
+   #
+   # On windows, `pre-runner-windows` is available that takes precedence over `pre-runner`.
+   # Same with `post-runner-windows`.
    [pre-runner]
 
    # Name of the command
