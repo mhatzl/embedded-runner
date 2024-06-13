@@ -1,6 +1,7 @@
 [package]
 name = "embedded-runner"
 description = "Cargo runner for embedded projects using OpenOCD."
+repository = "https://github.com/mhatzl/embedded-runner"
 license = "MIT"
 version = "0.3.0"
 edition = "2021"
