@@ -11,9 +11,9 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 tera = "1.19.1"
 object = "0.35.0"
-mantra-schema = { version = "0", path = "../mantra/schema" }
-mantra-lang-tracing = { path = "../mantra/langs/mantra-lang-tracing", version = "0" }
-mantra-rust-macros = { version = "0", path = "../mantra/langs/rust/mantra-rust-macros", features = ["extract"] }
+mantra-schema = { version = "0.4.0" }
+mantra-lang-tracing = { version = "0.4.0" }
+mantra-rust-macros = { version = "0.4.0", features = ["extract"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0" }
 defmt-decoder = { version = "=0.3.10", features = [

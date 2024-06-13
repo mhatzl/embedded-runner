@@ -53,7 +53,6 @@ mod tests {
         let workspace_root = get_cargo_root().unwrap().canonicalize().unwrap();
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let expected_root = PathBuf::from(manifest_dir).canonicalize().unwrap();
-        let expected_root = expected_root.parent().unwrap();
 
         assert_eq!(
             workspace_root, expected_root,

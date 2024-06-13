@@ -666,7 +666,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-lang-tracing"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d70b7958e21ac0cbbdb6be7510ece39e68c0e2ac8a2f2d2241e3678b767defe6"
 dependencies = [
  "cc",
  "proc-macro2",
@@ -678,8 +680,11 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-macros"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773c6a78c71bc9d9fb874746d2291b2daf4507e18d6ad46db76fca224174040e"
 dependencies = [
+ "mantra-lang-tracing",
  "mantra-rust-procm",
  "once_cell",
  "regex",
@@ -687,7 +692,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-procm"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb2db41fb72e25f4ce6926b1215f0ed7293c85080733156f2667ab0d23d22ffd"
 dependencies = [
  "mantra-lang-tracing",
  "proc-macro2",
@@ -697,7 +704,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-schema"
-version = "0.3.0"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a93467a5ba3866bf6fb4d2803961ba4df8ebbb74dbce3b48014451e04efac86f"
 dependencies = [
  "mantra-lang-tracing",
  "serde",
