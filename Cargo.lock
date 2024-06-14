@@ -407,7 +407,7 @@ checksum = "59f8e79d1fbf76bdfbde321e902714bf6c49df88a7dda6fc682fc2979226962d"
 
 [[package]]
 name = "embedded-runner"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "clap",
  "defmt-decoder",
@@ -679,25 +679,22 @@ dependencies = [
 
 [[package]]
 name = "mantra-lang-tracing"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d70b7958e21ac0cbbdb6be7510ece39e68c0e2ac8a2f2d2241e3678b767defe6"
+checksum = "65db24d83ac06df7fa3a4679744192ae6b55e2a5ef358f375a0f5fdfad395a4e"
 dependencies = [
- "cc",
+ "mantra-schema",
  "proc-macro2",
  "regex",
  "serde",
- "tree-sitter",
- "tree-sitter-rust",
 ]
 
 [[package]]
 name = "mantra-rust-macros"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "773c6a78c71bc9d9fb874746d2291b2daf4507e18d6ad46db76fca224174040e"
+checksum = "f90a30cb0ec3d44e201bc1623013770305db61e9ad1b4f11f443be756234e785"
 dependencies = [
- "mantra-lang-tracing",
  "mantra-rust-procm",
  "once_cell",
  "regex",
@@ -705,9 +702,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-procm"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2db41fb72e25f4ce6926b1215f0ed7293c85080733156f2667ab0d23d22ffd"
+checksum = "6bf4172b3e7a6e88f7e12c07f6a9ce297ba49d8e5c1fdf5c46307634ef7cde11"
 dependencies = [
  "mantra-lang-tracing",
  "proc-macro2",
@@ -717,11 +714,10 @@ dependencies = [
 
 [[package]]
 name = "mantra-schema"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a93467a5ba3866bf6fb4d2803961ba4df8ebbb74dbce3b48014451e04efac86f"
+checksum = "6cc26c32b1e42c8a8709ac1432ca64c3675625eb39238515afdb3f7803e5212a"
 dependencies = [
- "mantra-lang-tracing",
  "serde",
  "serde_json",
  "time",
@@ -729,9 +725,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.7.3"
+version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0d8b92cd8358e8d229c11df9358decae64d137c5be540952c5ca7b25aea768"
+checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "minimal-lexical"
@@ -1371,26 +1367,6 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "winnow",
-]
-
-[[package]]
-name = "tree-sitter"
-version = "0.22.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df7cc499ceadd4dcdf7ec6d4cbc34ece92c3fa07821e287aedecd4416c516dca"
-dependencies = [
- "cc",
- "regex",
-]
-
-[[package]]
-name = "tree-sitter-rust"
-version = "0.21.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "277690f420bf90741dea984f3da038ace46c4fe6047cba57a66822226cde1c93"
-dependencies = [
- "cc",
- "tree-sitter",
 ]
 
 [[package]]
