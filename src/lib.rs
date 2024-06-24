@@ -247,52 +247,59 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         coverage::coverage_from_defmt_frames(run_name, Some(meta), &defmt_frames, Some(logs))
             .map_err(RunnerError::Coverage)?;
 
-    let coverage_file = output_dir.join("coverage.json");
-    tokio::fs::write(
-        &coverage_file,
-        serde_json::to_string(&coverage).expect("Coverage schema is valid JSON."),
-    )
-    .await
-    .map_err(|err| {
-        RunnerError::Setup(format!(
-            "Could not write to file '{}'. Cause: {}",
-            coverage_file.display(),
-            err
-        ))
-    })?;
+    // If no tests were found, execution most likely `cargo run` or `cargo bench` => no test coverage
+    if coverage
+        .test_runs
+        .iter()
+        .any(|test_run| test_run.nr_of_tests > 0)
+    {
+        let coverage_file = output_dir.join("coverage.json");
+        tokio::fs::write(
+            &coverage_file,
+            serde_json::to_string(&coverage).expect("Coverage schema is valid JSON."),
+        )
+        .await
+        .map_err(|err| {
+            RunnerError::Setup(format!(
+                "Could not write to file '{}'. Cause: {}",
+                coverage_file.display(),
+                err
+            ))
+        })?;
 
-    println!("Coverage written to '{}'.", coverage_file.display());
+        println!("Coverage written to '{}'.", coverage_file.display());
 
-    let coverages_filepath = coverage::coverages_filepath();
+        let coverages_filepath = coverage::coverages_filepath();
 
-    if !coverages_filepath.exists() {
-        let _ = tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
-    } else {
-        let mut file = tokio::fs::OpenOptions::new()
-            .append(true)
-            .read(true)
-            .open(coverages_filepath)
-            .await
-            .expect("Coverages file exists.");
+        if !coverages_filepath.exists() {
+            let _ = tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
+        } else {
+            let mut file = tokio::fs::OpenOptions::new()
+                .append(true)
+                .read(true)
+                .open(coverages_filepath)
+                .await
+                .expect("Coverages file exists.");
 
-        let mut content = String::new();
-        file.read_to_string(&mut content)
-            .await
-            .expect("Reading coverages");
+            let mut content = String::new();
+            file.read_to_string(&mut content)
+                .await
+                .expect("Reading coverages");
 
-        let mut exists = false;
-        for line in content.lines() {
-            if line == coverage_file.display().to_string() {
-                exists = true;
-                break;
+            let mut exists = false;
+            for line in content.lines() {
+                if line == coverage_file.display().to_string() {
+                    exists = true;
+                    break;
+                }
             }
-        }
 
-        if !exists {
-            let _ = file.write_all("\n".as_bytes()).await;
-            let _ = file
-                .write_all(coverage_file.display().to_string().as_bytes())
-                .await;
+            if !exists {
+                let _ = file.write_all("\n".as_bytes()).await;
+                let _ = file
+                    .write_all(coverage_file.display().to_string().as_bytes())
+                    .await;
+            }
         }
     }
 

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use tokio::io::AsyncWriteExt;
+
 use crate::{cfg::CollectCmdConfig, coverage, RunnerError};
 
 pub async fn run(cfg: CollectCmdConfig) -> Result<(), RunnerError> {
@@ -50,11 +52,17 @@ pub async fn run(cfg: CollectCmdConfig) -> Result<(), RunnerError> {
         None => PathBuf::from("coverage.json"),
     };
 
-    let _ = tokio::fs::write(
-        output,
-        serde_json::to_string(&coverages).expect("Serializing coverage schema."),
-    )
-    .await;
+    let combined_coverage =
+        serde_json::to_string(&coverages).expect("Serializing coverage schema.");
+
+    if !output.exists() {
+        let mut file = tokio::fs::File::create(output).await.map_err(|_| {
+            RunnerError::Setup("Could not create combined coverage file.".to_string())
+        })?;
+        let _ = file.write(combined_coverage.as_bytes()).await;
+    } else {
+        let _ = tokio::fs::write(output, combined_coverage).await;
+    }
 
     // To only collect the newly created coverage files
     let _ = tokio::fs::remove_file(coverages_file).await;
