@@ -407,7 +407,7 @@ checksum = "59f8e79d1fbf76bdfbde321e902714bf6c49df88a7dda6fc682fc2979226962d"
 
 [[package]]
 name = "embedded-runner"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "clap",
  "defmt-decoder",
@@ -415,9 +415,9 @@ dependencies = [
  "defmt-parser",
  "env_logger",
  "log",
- "mantra-lang-tracing",
+ "mantra-lang-tracing 0.6.0",
  "mantra-rust-macros",
- "mantra-schema",
+ "mantra-schema 0.6.0",
  "object 0.35.0",
  "path-clean",
  "path-slash",
@@ -683,17 +683,28 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65db24d83ac06df7fa3a4679744192ae6b55e2a5ef358f375a0f5fdfad395a4e"
 dependencies = [
- "mantra-schema",
+ "mantra-schema 0.5.0",
  "proc-macro2",
  "regex",
  "serde",
 ]
 
 [[package]]
-name = "mantra-rust-macros"
-version = "0.5.0"
+name = "mantra-lang-tracing"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f90a30cb0ec3d44e201bc1623013770305db61e9ad1b4f11f443be756234e785"
+checksum = "e5451dd383708502718ea5250df356bac1ec87ea2cff57b0143e64e51f9ffedf"
+dependencies = [
+ "mantra-schema 0.5.0",
+ "path-slash",
+ "serde",
+]
+
+[[package]]
+name = "mantra-rust-macros"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f402399ee44e26905f35c2d1af1e542f7e1c9ed480718ed7897fd9705a14c4"
 dependencies = [
  "mantra-rust-procm",
  "once_cell",
@@ -706,7 +717,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bf4172b3e7a6e88f7e12c07f6a9ce297ba49d8e5c1fdf5c46307634ef7cde11"
 dependencies = [
- "mantra-lang-tracing",
+ "mantra-lang-tracing 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.66",
@@ -717,6 +728,17 @@ name = "mantra-schema"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cc26c32b1e42c8a8709ac1432ca64c3675625eb39238515afdb3f7803e5212a"
+dependencies = [
+ "serde",
+ "serde_json",
+ "time",
+]
+
+[[package]]
+name = "mantra-schema"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01962b7b29b37d43b7b67ea4677704f715cb818c79d7e6dd47b9bfaa98a9124c"
 dependencies = [
  "serde",
  "serde_json",
