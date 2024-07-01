@@ -19,7 +19,7 @@ pub mod path;
 
 pub const DEFAULT_RTT_PORT: u16 = 19021;
 
-pub const TIMEOUT_SEC: u64 = 15;
+pub const TIMEOUT_SEC: u64 = 60;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
