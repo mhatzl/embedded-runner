@@ -19,7 +19,10 @@ pub mod path;
 
 pub const DEFAULT_RTT_PORT: u16 = 19021;
 
-pub const TIMEOUT_SEC: u64 = 60;
+/// Timeout defines the maximum duration to setup RTT connection between host and target
+pub const SETUP_RTT_TIMEOUT_SEC: u64 = 60;
+/// Timeout defines the maximum duration of one test run
+pub const EXECUTION_TIMEOUT_SEC: u64 = 3600; // 1h
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunnerError {
@@ -196,7 +199,12 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         };
         match frame.level {
             Some(level) => log::log!(level, "{}\n@{}", frame.data, location),
-            None => println!("{}\n@{}", frame.data, location),
+            None => {
+                // mantra coverage logs not printed to remove clutter
+                if mantra_rust_macros::extract::extract_first_coverage(&frame.data).is_none() {
+                    println!("{}\n@{}", frame.data, location)
+                }
+            }
         }
     }
 
@@ -377,7 +385,7 @@ pub async fn run_gdb_sequence(
 
     println!("--------------- OpenOCD --------------------");
     'outer: while let Ok(Ok(n)) = tokio::time::timeout(
-        std::time::Duration::from_secs(TIMEOUT_SEC),
+        std::time::Duration::from_secs(SETUP_RTT_TIMEOUT_SEC),
         open_ocd_output.read(&mut buf),
     )
     .await
@@ -415,18 +423,22 @@ pub async fn run_gdb_sequence(
     });
 
     // wait for gdb to end
-    let gdb_result =
-        match tokio::time::timeout(std::time::Duration::from_secs(TIMEOUT_SEC), gdb.wait()).await {
-            Ok(Ok(status)) => Ok(status),
-            Ok(Err(err)) => Err(RunnerError::Gdb(format!(
-                "Error waiting for gdb to finish. Cause: {err}"
-            ))),
-            Err(_) => {
-                log::error!("Timeout while waiting for gdb to end.");
-                let _ = gdb.kill().await;
-                return Err(RunnerError::RttTimeout);
-            }
-        };
+    let gdb_result = match tokio::time::timeout(
+        std::time::Duration::from_secs(EXECUTION_TIMEOUT_SEC),
+        gdb.wait(),
+    )
+    .await
+    {
+        Ok(Ok(status)) => Ok(status),
+        Ok(Err(err)) => Err(RunnerError::Gdb(format!(
+            "Error waiting for gdb to finish. Cause: {err}"
+        ))),
+        Err(_) => {
+            log::error!("Timeout while waiting for gdb to end.");
+            let _ = gdb.kill().await;
+            return Err(RunnerError::RttTimeout);
+        }
+    };
 
     // signal defmt end
     end_signal.store(true, std::sync::atomic::Ordering::Relaxed);
