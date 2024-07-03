@@ -91,28 +91,35 @@ pub fn read_defmt_frames(
                 Ok(frame) => {
                     let json_frame = create_json_frame(workspace_root, &frame, &locs);
 
-                    let location = if json_frame.location.file.is_some()
-                        && json_frame.location.line.is_some()
-                        && json_frame.location.module_path.is_some()
-                    {
-                        let mod_path = json_frame.location.module_path.as_ref().unwrap();
-
-                        format!(
-                            "{}:{} in {}::{}::{}",
-                            json_frame.location.file.as_ref().unwrap(),
-                            json_frame.location.line.unwrap(),
-                            mod_path.crate_name,
-                            mod_path.modules.join("::"),
-                            mod_path.function,
-                        )
+                    let mod_path = if let Some(mod_path) = &json_frame.location.module_path {
+                        if mod_path.modules.is_empty() {
+                            Some(format!("{}::{}", mod_path.crate_name, mod_path.function))
+                        } else {
+                            Some(format!(
+                                "{}::{}::{}",
+                                mod_path.crate_name,
+                                mod_path.modules.join("::"),
+                                mod_path.function
+                            ))
+                        }
                     } else {
-                        "no-location".to_string()
+                        None
                     };
+
+                    // use kv feature due to lifetime problems with arg
+                    let val = Some([("msg", log::kv::Value::from_display(&json_frame.data))]);
 
                     match json_frame.level {
                         Some(level) => {
-                            log::log!(level, "TARGET | {}", json_frame.data);
-                            log::trace!("TARGET-LOCATION | {}", location)
+                            let log_record = log::RecordBuilder::new()
+                                .level(level)
+                                .file(json_frame.location.file.as_deref())
+                                .line(json_frame.location.line)
+                                .module_path(mod_path.as_deref())
+                                .target("embedded")
+                                .key_values(&val)
+                                .build();
+                            log::logger().log(&log_record);
                         }
                         None => {
                             // mantra coverage logs not printed to remove clutter
@@ -120,7 +127,26 @@ pub fn read_defmt_frames(
                                 .is_none()
                             {
                                 println!("TARGET-PRINT | {}", json_frame.data);
-                                log::trace!("TARGET-LOCATION | {}", location);
+
+                                if log::Level::Trace <= log::STATIC_MAX_LEVEL
+                                    && log::Level::Trace <= log::max_level()
+                                {
+                                    let location = if json_frame.location.file.is_some()
+                                        && json_frame.location.line.is_some()
+                                        && mod_path.is_some()
+                                    {
+                                        format!(
+                                            "{} in {}:{}",
+                                            mod_path.unwrap(),
+                                            json_frame.location.file.as_ref().unwrap(),
+                                            json_frame.location.line.unwrap(),
+                                        )
+                                    } else {
+                                        "no-location info available".to_string()
+                                    };
+
+                                    println!("             | => {}", location);
+                                }
                             }
                         }
                     }

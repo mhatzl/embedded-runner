@@ -9,6 +9,7 @@ async fn main() {
         log::LevelFilter::from_str(&std::env::var("DEFMT_LOG").unwrap_or("info".to_string()))
             .unwrap_or(log::LevelFilter::Info);
     env_logger::Builder::from_default_env()
+        .format_module_path(true)
         .filter_level(log_level)
         .init();
 
