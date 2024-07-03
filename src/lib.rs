@@ -158,7 +158,8 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         )));
     }
 
-    println!("--------------- Logs --------------------");
+    println!("------------------ Output ---------------");
+
     let log_file = tokio::fs::File::create(&log_filepath)
         .await
         .map_err(|err| {
@@ -179,36 +180,8 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
             )
             .await;
         let _ = writer.write_all("\n".as_bytes()).await;
-
-        let location = if frame.location.file.is_some()
-            && frame.location.line.is_some()
-            && frame.location.module_path.is_some()
-        {
-            let mod_path = frame.location.module_path.as_ref().unwrap();
-
-            format!(
-                "{}:{} in {}::{}::{}",
-                frame.location.file.as_ref().unwrap(),
-                frame.location.line.unwrap(),
-                mod_path.crate_name,
-                mod_path.modules.join("::"),
-                mod_path.function,
-            )
-        } else {
-            "no-location".to_string()
-        };
-        match frame.level {
-            Some(level) => log::log!(level, "{}\n@{}", frame.data, location),
-            None => {
-                // mantra coverage logs not printed to remove clutter
-                if mantra_rust_macros::extract::extract_first_coverage(&frame.data).is_none() {
-                    println!("{}\n@{}", frame.data, location)
-                }
-            }
-        }
     }
 
-    println!("------------------ Output ---------------");
     println!("Logs written to '{}'.", log_filepath.display());
 
     let run_name = run_cfg

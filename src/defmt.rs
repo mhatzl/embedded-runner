@@ -89,7 +89,43 @@ pub fn read_defmt_frames(
         loop {
             match stream_decoder.decode() {
                 Ok(frame) => {
-                    json_frames.push(create_json_frame(workspace_root, &frame, &locs));
+                    let json_frame = create_json_frame(workspace_root, &frame, &locs);
+
+                    let location = if json_frame.location.file.is_some()
+                        && json_frame.location.line.is_some()
+                        && json_frame.location.module_path.is_some()
+                    {
+                        let mod_path = json_frame.location.module_path.as_ref().unwrap();
+
+                        format!(
+                            "{}:{} in {}::{}::{}",
+                            json_frame.location.file.as_ref().unwrap(),
+                            json_frame.location.line.unwrap(),
+                            mod_path.crate_name,
+                            mod_path.modules.join("::"),
+                            mod_path.function,
+                        )
+                    } else {
+                        "no-location".to_string()
+                    };
+
+                    match json_frame.level {
+                        Some(level) => {
+                            log::log!(level, "TARGET | {}", json_frame.data);
+                            log::trace!("TARGET-LOCATION | {}", location)
+                        }
+                        None => {
+                            // mantra coverage logs not printed to remove clutter
+                            if mantra_rust_macros::extract::extract_first_coverage(&json_frame.data)
+                                .is_none()
+                            {
+                                println!("TARGET-PRINT | {}", json_frame.data);
+                                log::trace!("TARGET-LOCATION | {}", location);
+                            }
+                        }
+                    }
+
+                    json_frames.push(json_frame);
                 }
                 Err(DecodeError::UnexpectedEof) => break,
                 Err(DecodeError::Malformed) => match table.encoding().can_recover() {
