@@ -41,7 +41,12 @@ pub async fn run(cfg: CollectCmdConfig) -> Result<(), RunnerError> {
 
     let output = match cfg.output {
         Some(out) => {
-            if out.is_file() {
+            if out
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_lowercase())
+                == Some("json".to_string())
+            {
                 out
             } else {
                 return Err(RunnerError::Setup(
