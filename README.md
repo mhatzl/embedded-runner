@@ -18,7 +18,7 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    By default, `embedded-runner` will look for a runner configuration at `.embedded/runner.toml`.
    A custom path may be set by the `--runner-cfg` argument before the `run` command.
 
-   Be sure to enable the `defmt` feature for [`mantra-rust-macros`](https://github.com/mhatzl/mantra/tree/main/langs/rust/mantra-rust-macros) to get the required coverage logs when using [*mantra*](https://github.com/mhatzl/mantra).
+   Be sure to enable the `defmt` feature for [`mantra-rust-macros`](https://github.com/mhatzl/mantra/tree/main/langs/rust/mantra-rust-macros) to get the requirement coverage logs when using [*mantra*](https://github.com/mhatzl/mantra).
 
    **The configuration allows the following settings:**
 
