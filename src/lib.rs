@@ -106,7 +106,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     let pre_command = main_cfg.runner_cfg.pre_runner.as_ref();
 
     if let Some(pre_command) = pre_command {
-        println!("--------------- Pre Runner --------------------");
+        println!("-------------------- Pre Runner --------------------");
         let mut args = pre_command.args.clone();
         args.push(binary_str.clone());
 
@@ -158,7 +158,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         )));
     }
 
-    println!("------------------ Output ---------------");
+    println!("------------------ Output ------------------");
 
     let log_file = tokio::fs::File::create(&log_filepath)
         .await
@@ -294,7 +294,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     let post_command = main_cfg.runner_cfg.post_runner.as_ref();
 
     if let Some(post_command) = post_command {
-        println!("--------------- Post Runner --------------------");
+        println!("-------------------- Post Runner --------------------");
         let mut args = post_command.args.clone();
         args.push(binary_str);
 
@@ -336,7 +336,9 @@ pub async fn run_gdb_sequence(
     ),
     RunnerError,
 > {
-    let mut gdb_cmd = tokio::process::Command::new("arm-none-eabi-gdb");
+    let mut gdb_cmd = tokio::process::Command::new(
+        std::env::var("GDB").unwrap_or("arm-none-eabi-gdb".to_string()),
+    );
     let mut gdb = gdb_cmd
         .args([
             "-x",
@@ -349,17 +351,17 @@ pub async fn run_gdb_sequence(
         .spawn()
         .unwrap();
 
-    let mut open_ocd_output = gdb.stderr.take().unwrap();
+    let mut gdb_stderr = gdb.stderr.take().unwrap();
 
     let mut buf = [0; 100];
     let mut content = Vec::new();
     let rtt_start = b"for rtt connection";
     let mut rtt_found = false;
 
-    println!("--------------- OpenOCD --------------------");
+    println!("-------------------- Communication Setup --------------------");
     'outer: while let Ok(Ok(n)) = tokio::time::timeout(
         std::time::Duration::from_secs(SETUP_RTT_TIMEOUT_SEC),
-        open_ocd_output.read(&mut buf),
+        gdb_stderr.read(&mut buf),
     )
     .await
     {
@@ -385,6 +387,7 @@ pub async fn run_gdb_sequence(
     }
 
     println!();
+    println!("-------------------- Running --------------------");
 
     // start defmt thread + end-signal
     let end_signal = Arc::new(AtomicBool::new(false));
@@ -421,7 +424,6 @@ pub async fn run_gdb_sequence(
         .await
         .map_err(|_| RunnerError::Defmt("Failed waiting for defmt logs.".to_string()))?;
 
-    // print logs
     let defmt_frames = defmt_result
         .map_err(|err| RunnerError::Defmt(format!("Failed extracting defmt logs. Cause: {err}")))?;
 

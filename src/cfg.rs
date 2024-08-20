@@ -92,6 +92,8 @@ pub struct RunnerConfig {
     pub load: Option<String>,
     #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
+    #[serde(alias = "gdb-connection")]
+    pub gdb_connection: Option<String>,
     #[serde(alias = "gdb-logfile")]
     pub gdb_logfile: Option<PathBuf>,
     #[serde(alias = "pre-runner")]
@@ -134,11 +136,32 @@ impl RunnerConfig {
         #[cfg(not(target_os = "windows"))]
         let sleep_cmd = "sleep";
 
+        let gdb_logfile = self
+            .gdb_logfile
+            .clone()
+            .unwrap_or(output_dir.join("gdb.log"));
+        let gdb_logfile = gdb_logfile
+            .to_slash()
+            .expect("GDB logfile must be a valid filepath.");
+
+        let gdb_conn = if let Some(gdb_conn) = &self.gdb_connection {
+            format!("target extended-remote {gdb_conn}\nset logging file {gdb_logfile}")
+        } else {
+            let openocd_cfg = self
+                .openocd_cfg
+                .clone()
+                .unwrap_or(PathBuf::from(".embedded/openocd.cfg"));
+            let openocd_cfg = openocd_cfg
+                .to_slash()
+                .expect("OpenOCD configuration file must be a valid filepath.");
+            format!("target extended-remote | openocd -c \"gdb_port pipe; log_output {gdb_logfile}\" -f {openocd_cfg}")
+        };
+
         Ok(format!(
             "
 set pagination off
 
-target extended-remote | openocd -c \"gdb_port pipe; log_output {}\" -f {}
+{}
 
 {}
 
@@ -157,16 +180,7 @@ shell {sleep_cmd} 1
 
 quit        
 ",
-            self.gdb_logfile
-                .clone()
-                .unwrap_or(output_dir.join("gdb.log"))
-                .to_slash()
-                .expect("GDB logfile must be a valid filepath."),
-            self.openocd_cfg
-                .clone()
-                .unwrap_or(PathBuf::from(".embedded/openocd.cfg"))
-                .to_slash()
-                .expect("OpenOCD configuration file must be a valid filepath."),
+            gdb_conn,
             resolved_load,
             rtt_address,
             rtt_length,

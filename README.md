@@ -1,6 +1,9 @@
 # embedded-runner
 
-Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
+Cargo runner for embedded projects using [GDB](https://www.sourceware.org/gdb/) and [OpenOCD](https://openocd.org/).
+
+Ensure the GDB executable is either `arm-none-eabi-gdb` or set per environmental variable `GDB`.
+The OpenOCD executable `openocd` must be available on path.
 
 ## Usage
 
@@ -34,10 +37,13 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    # Optional: Path to a custom OpenOCD configuration
    openocd-cfg = ".embedded/openocd.cfg"
 
-   # Optional: Path to write OpenOCD logs to
+   # Optional: Connection to a GDB server to use instead of OpenOCD
+   gdb-connection = ""
+
+   # Optional: Path to write GDB logs to
    gdb-logfile = "<output directory>/gdb.log"
 
-   # Optional: RTT port to use
+   # Optional: RTT port to use on the host
    rtt-port = 19021
 
    # Optional: Define a command to run before the runner executes the binary.
@@ -55,7 +61,9 @@ Cargo runner for embedded projects using [OpenOCD](https://openocd.org/).
    args = ["echo"]
    ```
 
-4. Add your OpenOCD configuration
+4. Optional: Add your OpenOCD configuration
+
+   This configuration file is needed if no GDB connection is set in the `runner.toml` file.
 
    By default, `embedded-runner` will look for `.embedded/openocd.cfg`,
    but you may change this in the runner configuration.
