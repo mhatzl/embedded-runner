@@ -172,15 +172,17 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
     let mut writer = BufWriter::new(log_file);
 
     for frame in &defmt_frames {
-        let _ = writer
+        let _w = writer
             .write_all(
                 serde_json::to_string(frame)
                     .expect("DefmtFrame is valid JSON.")
                     .as_bytes(),
             )
             .await;
-        let _ = writer.write_all("\n".as_bytes()).await;
+        let _w = writer.write_all("\n".as_bytes()).await;
     }
+
+    let _f = writer.flush().await;
 
     println!("Logs written to '{}'.", log_filepath.display());
 
@@ -253,7 +255,8 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         let coverages_filepath = coverage::coverages_filepath();
 
         if !coverages_filepath.exists() {
-            let _ = tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
+            let _w =
+                tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
         } else {
             let mut file = tokio::fs::OpenOptions::new()
                 .append(true)
@@ -276,11 +279,13 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
             }
 
             if !exists {
-                let _ = file.write_all("\n".as_bytes()).await;
-                let _ = file
+                let _w = file.write_all("\n".as_bytes()).await;
+                let _w = file
                     .write_all(coverage_file.display().to_string().as_bytes())
                     .await;
             }
+
+            let _f = file.flush().await;
         }
     }
 
