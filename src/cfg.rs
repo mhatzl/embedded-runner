@@ -172,7 +172,7 @@ monitor rtt setup 0x{:x} {} \"SEGGER RTT\"
 monitor rtt start
 monitor rtt server start {} 0
 
-shell {sleep_cmd} 1
+shell {sleep_cmd} 4
 
 continue
 
