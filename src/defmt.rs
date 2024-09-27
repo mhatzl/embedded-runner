@@ -77,6 +77,11 @@ pub fn read_defmt_frames(
             Err(err) => {
                 if err.kind() == std::io::ErrorKind::TimedOut {
                     continue;
+                } else if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::ConnectionAborted | std::io::ErrorKind::ConnectionReset
+                ) {
+                    return Ok(json_frames);
                 } else {
                     return Err(DefmtError::TcpError(err.to_string()));
                 }
