@@ -59,11 +59,7 @@ pub fn read_defmt_frames(
     loop {
         // read from tcpstream and push it to the decoder
         if end_signal.load(std::sync::atomic::Ordering::Relaxed) {
-            return if json_frames.is_empty() {
-                Err(DefmtError::NoFramesReceived)
-            } else {
-                Ok(json_frames)
-            };
+            return Ok(json_frames);
         }
 
         let n = match source.read(&mut buf) {
