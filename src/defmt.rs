@@ -28,7 +28,7 @@ pub enum DefmtError {
 pub fn read_defmt_frames(
     binary: &Path,
     workspace_root: &Path,
-    tcp_port: u16,
+    mut stream: std::net::TcpStream,
     end_signal: Arc<AtomicBool>,
 ) -> Result<Vec<JsonFrame>, DefmtError> {
     let bytes = std::fs::read(binary).map_err(DefmtError::ReadBinary)?;
@@ -49,11 +49,12 @@ pub fn read_defmt_frames(
 
     const READ_BUFFER_SIZE: usize = 1024;
     let mut buf = [0; READ_BUFFER_SIZE];
-    let mut stream_decoder = table.new_stream_decoder();
+    let mut decoder = table.new_stream_decoder();
+    let mut stream_decoder = Box::pin(&mut decoder);
 
-    let mut source = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), tcp_port))
-        .map_err(|err| DefmtError::TcpConnect(err.to_string()))?;
-    let _ = source.set_read_timeout(Some(Duration::from_secs(2)));
+    // let mut source = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), tcp_port))
+    //     .map_err(|err| DefmtError::TcpConnect(err.to_string()))?;
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
     let mut json_frames = Vec::new();
 
     loop {
@@ -62,7 +63,7 @@ pub fn read_defmt_frames(
             return Ok(json_frames);
         }
 
-        let n = match source.read(&mut buf) {
+        let n = match stream.read(&mut buf) {
             Ok(len) => {
                 if len == 0 {
                     continue;
