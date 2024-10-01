@@ -415,7 +415,7 @@ pub async fn run_gdb_sequence(
                             std::io::ErrorKind::TimedOut | std::io::ErrorKind::ConnectionRefused
                         ) =>
                     {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
+                        std::thread::sleep(std::time::Duration::from_millis(50));
                     }
                     Err(err) => {
                         return Err(err);
