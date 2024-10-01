@@ -1,6 +1,5 @@
 use std::{
     io::Read,
-    net::{Ipv4Addr, SocketAddrV4, TcpStream},
     path::Path,
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
@@ -52,8 +51,6 @@ pub fn read_defmt_frames(
     let mut decoder = table.new_stream_decoder();
     let mut stream_decoder = Box::pin(&mut decoder);
 
-    // let mut source = TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), tcp_port))
-    //     .map_err(|err| DefmtError::TcpConnect(err.to_string()))?;
     let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
     let mut json_frames = Vec::new();
 

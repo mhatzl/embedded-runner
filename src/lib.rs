@@ -10,10 +10,7 @@ use coverage::CoverageError;
 use defmt_json_schema::v1::JsonFrame;
 use path_clean::PathClean;
 use serde_json::json;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufWriter},
-    net::tcp,
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufWriter};
 
 pub mod cfg;
 pub mod collect;
@@ -361,44 +358,10 @@ pub async fn run_gdb_sequence(
         ])
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
-        // .stderr(Stdio::piped())
         .spawn()
         .unwrap();
 
-    // let mut gdb_stderr = gdb.stderr.take().unwrap();
-
-    // let mut buf = [0; 100];
-    // let mut content = Vec::new();
-    // let rtt_start = b"for rtt connection";
-    // let mut rtt_found = false;
-
     println!("-------------------- Communication Setup --------------------");
-    // 'outer: while let Ok(Ok(n)) = tokio::time::timeout(
-    //     std::time::Duration::from_secs(SETUP_RTT_TIMEOUT_SEC),
-    //     gdb_stderr.read(&mut buf),
-    // )
-    // .await
-    // {
-    //     if n > 0 {
-    //         content.extend_from_slice(&buf[..n]);
-
-    //         print!("{}", String::from_utf8_lossy(&buf[..n]));
-
-    //         for i in 0..n {
-    //             let slice_end = content.len().saturating_sub(i);
-    //             if content[..slice_end].ends_with(rtt_start) {
-    //                 rtt_found = true;
-    //                 break 'outer;
-    //             }
-    //         }
-    //     }
-    // }
-
-    // if !rtt_found {
-    //     log::error!("Timeout while waiting for rtt connection.");
-    //     let _ = gdb.kill().await;
-    //     return Err(RunnerError::RttTimeout);
-    // }
 
     let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
     let stream = tokio::time::timeout(
