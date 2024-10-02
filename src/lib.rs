@@ -1,4 +1,5 @@
 use std::{
+    net::{Ipv4Addr, SocketAddrV4, TcpStream},
     path::{Path, PathBuf},
     process::Stdio,
     sync::{atomic::AtomicBool, Arc},
@@ -160,132 +161,137 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     println!("------------------ Output ------------------");
 
-    let log_file = tokio::fs::File::create(&log_filepath)
-        .await
-        .map_err(|err| {
-            RunnerError::Setup(format!(
-                "Could not create file '{}'. Cause: {}",
-                log_filepath.display(),
-                err
-            ))
-        })?;
-    let mut writer = BufWriter::new(log_file);
-
-    for frame in &defmt_frames {
-        let _w = writer
-            .write_all(
-                serde_json::to_string(frame)
-                    .expect("DefmtFrame is valid JSON.")
-                    .as_bytes(),
-            )
-            .await;
-        let _w = writer.write_all("\n".as_bytes()).await;
-    }
-
-    let _f = writer.flush().await;
-
-    println!("Logs written to '{}'.", log_filepath.display());
-
-    let run_name = run_cfg
-        .run_name
-        .unwrap_or(rel_binary_path.display().to_string());
-
-    let meta_path = run_cfg
-        .meta_filepath
-        .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
-
-    let meta = if meta_path.exists() {
-        let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|err| {
-            RunnerError::Setup(format!(
-                "Could not read metadata '{}'. Cause: {}",
-                meta_path.display(),
-                err
-            ))
-        })?;
-
-        let mut meta: serde_json::Map<String, serde_json::Value> =
-            serde_json::from_str(&meta_content).map_err(|err| {
+    if defmt_frames.is_empty() {
+        println!("No logs received.");
+    } else {
+        let log_file = tokio::fs::File::create(&log_filepath)
+            .await
+            .map_err(|err| {
                 RunnerError::Setup(format!(
-                    "Could not deserialize metadata '{}'. Cause: {}",
+                    "Could not create file '{}'. Cause: {}",
+                    log_filepath.display(),
+                    err
+                ))
+            })?;
+        let mut writer = BufWriter::new(log_file);
+
+        for frame in &defmt_frames {
+            let _w = writer
+                .write_all(
+                    serde_json::to_string(frame)
+                        .expect("DefmtFrame is valid JSON.")
+                        .as_bytes(),
+                )
+                .await;
+            let _w = writer.write_all("\n".as_bytes()).await;
+        }
+
+        let _f = writer.flush().await;
+
+        println!("Logs written to '{}'.", log_filepath.display());
+
+        let run_name = run_cfg
+            .run_name
+            .unwrap_or(rel_binary_path.display().to_string());
+
+        let meta_path = run_cfg
+            .meta_filepath
+            .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
+
+        let meta = if meta_path.exists() {
+            let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|err| {
+                RunnerError::Setup(format!(
+                    "Could not read metadata '{}'. Cause: {}",
                     meta_path.display(),
                     err
                 ))
             })?;
 
-        meta.insert(
-            "binary".to_string(),
-            serde_json::Value::String(rel_binary_str),
-        );
+            let mut meta: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(&meta_content).map_err(|err| {
+                    RunnerError::Setup(format!(
+                        "Could not deserialize metadata '{}'. Cause: {}",
+                        meta_path.display(),
+                        err
+                    ))
+                })?;
 
-        serde_json::Value::Object(meta)
-    } else {
-        json!({
-            "binary": rel_binary_str
-        })
-    };
+            meta.insert(
+                "binary".to_string(),
+                serde_json::Value::String(rel_binary_str),
+            );
 
-    let logs = serde_json::to_string(&defmt_frames).expect("DefmtFrames were deserialized before.");
-
-    let coverage =
-        coverage::coverage_from_defmt_frames(run_name, Some(meta), &defmt_frames, Some(logs))
-            .map_err(RunnerError::Coverage)?;
-
-    // If no tests were found, execution most likely `cargo run` or `cargo bench` => no test coverage
-    if coverage
-        .test_runs
-        .iter()
-        .any(|test_run| test_run.nr_of_tests > 0)
-    {
-        let coverage_file = output_dir.join("coverage.json");
-        tokio::fs::write(
-            &coverage_file,
-            serde_json::to_string(&coverage).expect("Coverage schema is valid JSON."),
-        )
-        .await
-        .map_err(|err| {
-            RunnerError::Setup(format!(
-                "Could not write to file '{}'. Cause: {}",
-                coverage_file.display(),
-                err
-            ))
-        })?;
-
-        println!("Coverage written to '{}'.", coverage_file.display());
-
-        let coverages_filepath = coverage::coverages_filepath();
-
-        if !coverages_filepath.exists() {
-            let _w =
-                tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
+            serde_json::Value::Object(meta)
         } else {
-            let mut file = tokio::fs::OpenOptions::new()
-                .append(true)
-                .read(true)
-                .open(coverages_filepath)
-                .await
-                .expect("Coverages file exists.");
+            json!({
+                "binary": rel_binary_str
+            })
+        };
 
-            let mut content = String::new();
-            file.read_to_string(&mut content)
-                .await
-                .expect("Reading coverages");
+        let logs =
+            serde_json::to_string(&defmt_frames).expect("DefmtFrames were deserialized before.");
 
-            let mut exists = false;
-            for line in content.lines() {
-                if line == coverage_file.display().to_string() {
-                    exists = true;
-                    break;
+        let coverage =
+            coverage::coverage_from_defmt_frames(run_name, Some(meta), &defmt_frames, Some(logs))
+                .map_err(RunnerError::Coverage)?;
+
+        // If no tests were found, execution most likely `cargo run` or `cargo bench` => no test coverage
+        if coverage
+            .test_runs
+            .iter()
+            .any(|test_run| test_run.nr_of_tests > 0)
+        {
+            let coverage_file = output_dir.join("coverage.json");
+            tokio::fs::write(
+                &coverage_file,
+                serde_json::to_string(&coverage).expect("Coverage schema is valid JSON."),
+            )
+            .await
+            .map_err(|err| {
+                RunnerError::Setup(format!(
+                    "Could not write to file '{}'. Cause: {}",
+                    coverage_file.display(),
+                    err
+                ))
+            })?;
+
+            println!("Coverage written to '{}'.", coverage_file.display());
+
+            let coverages_filepath = coverage::coverages_filepath();
+
+            if !coverages_filepath.exists() {
+                let _w =
+                    tokio::fs::write(coverages_filepath, coverage_file.display().to_string()).await;
+            } else {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .append(true)
+                    .read(true)
+                    .open(coverages_filepath)
+                    .await
+                    .expect("Coverages file exists.");
+
+                let mut content = String::new();
+                file.read_to_string(&mut content)
+                    .await
+                    .expect("Reading coverages");
+
+                let mut exists = false;
+                for line in content.lines() {
+                    if line == coverage_file.display().to_string() {
+                        exists = true;
+                        break;
+                    }
                 }
-            }
 
-            if !exists {
-                let _w = file.write_all("\n".as_bytes()).await;
-                let _w = file
-                    .write_all(coverage_file.display().to_string().as_bytes())
-                    .await;
-            }
+                if !exists {
+                    let _w = file.write_all("\n".as_bytes()).await;
+                    let _w = file
+                        .write_all(coverage_file.display().to_string().as_bytes())
+                        .await;
+                }
 
-            let _f = file.flush().await;
+                let _f = file.flush().await;
+            }
         }
     }
 
@@ -352,44 +358,50 @@ pub async fn run_gdb_sequence(
         ])
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
 
-    let mut gdb_stderr = gdb.stderr.take().unwrap();
-
-    let mut buf = [0; 100];
-    let mut content = Vec::new();
-    let rtt_start = b"for rtt connection";
-    let mut rtt_found = false;
-
     println!("-------------------- Communication Setup --------------------");
-    'outer: while let Ok(Ok(n)) = tokio::time::timeout(
+
+    let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
+    let stream = tokio::time::timeout(
         std::time::Duration::from_secs(SETUP_RTT_TIMEOUT_SEC),
-        gdb_stderr.read(&mut buf),
-    )
-    .await
-    {
-        if n > 0 {
-            content.extend_from_slice(&buf[..n]);
-
-            print!("{}", String::from_utf8_lossy(&buf[..n]));
-
-            for i in 0..n {
-                let slice_end = content.len().saturating_sub(i);
-                if content[..slice_end].ends_with(rtt_start) {
-                    rtt_found = true;
-                    break 'outer;
+        tokio::spawn(async move {
+            loop {
+                match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), rtt_port)) {
+                    Ok(stream) => {
+                        return Ok(stream);
+                    }
+                    Err(err)
+                        if matches!(
+                            err.kind(),
+                            std::io::ErrorKind::TimedOut | std::io::ErrorKind::ConnectionRefused
+                        ) =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    Err(err) => {
+                        return Err(err);
+                    }
                 }
             }
-        }
-    }
+        }),
+    )
+    .await;
 
-    if !rtt_found {
-        log::error!("Timeout while waiting for rtt connection.");
-        let _ = gdb.kill().await;
-        return Err(RunnerError::RttTimeout);
-    }
+    let stream = match stream {
+        Ok(Ok(Ok(stream))) => stream,
+        Ok(Ok(Err(io_err))) => {
+            log::error!("Failed to connect to RTT. Cause: {io_err}");
+            let _ = gdb.kill().await;
+            return Err(RunnerError::RttTimeout);
+        }
+        _ => {
+            log::error!("Timeout while trying to connect to RTT.");
+            let _ = gdb.kill().await;
+            return Err(RunnerError::RttTimeout);
+        }
+    };
 
     println!();
     println!("-------------------- Running --------------------");
@@ -397,10 +409,9 @@ pub async fn run_gdb_sequence(
     // start defmt thread + end-signal
     let end_signal = Arc::new(AtomicBool::new(false));
     let thread_signal = end_signal.clone();
-    let rtt_port = runner_cfg.rtt_port.unwrap_or(DEFAULT_RTT_PORT);
     let workspace_root = workspace_dir.to_path_buf();
     let defmt_thread = tokio::spawn(async move {
-        defmt::read_defmt_frames(&binary, &workspace_root, rtt_port, thread_signal)
+        defmt::read_defmt_frames(&binary, &workspace_root, stream, thread_signal)
     });
 
     // wait for gdb to end
