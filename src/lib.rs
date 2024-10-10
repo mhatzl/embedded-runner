@@ -48,10 +48,11 @@ pub enum RunnerError {
 }
 
 pub async fn run(cli_cfg: CliConfig) -> Result<(), RunnerError> {
-    let cfg = cfg::get_cfg(&cli_cfg)?;
-
     match cli_cfg.cmd {
-        cfg::Cmd::Run(run_cfg) => run_cmd(&cfg, run_cfg).await,
+        cfg::Cmd::Run(run_cfg) => {
+            let cfg = cfg::get_cfg(&run_cfg.runner_cfg, cli_cfg.verbose)?;
+            run_cmd(&cfg, run_cfg).await
+        }
         cfg::Cmd::Collect(collect_cfg) => collect::run(collect_cfg).await,
     }
 }

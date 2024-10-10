@@ -6,8 +6,6 @@ use tera::{Context, Tera};
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct CliConfig {
-    #[arg(long)]
-    pub runner_cfg: Option<PathBuf>,
     #[arg(long, short = 'v')]
     pub verbose: bool,
     #[command(subcommand)]
@@ -32,7 +30,7 @@ pub enum ConfigError {
     DeToml(#[from] toml::de::Error),
 }
 
-pub fn get_cfg(cli_cfg: &CliConfig) -> Result<ResolvedConfig, ConfigError> {
+pub fn get_cfg(runner_cfg: &Option<PathBuf>, verbose: bool) -> Result<ResolvedConfig, ConfigError> {
     let workspace_dir = crate::path::get_cargo_root()?;
     let embedded_dir: PathBuf = workspace_dir.join(".embedded/");
 
@@ -40,8 +38,7 @@ pub fn get_cfg(cli_cfg: &CliConfig) -> Result<ResolvedConfig, ConfigError> {
         std::fs::create_dir(embedded_dir.clone())?;
     }
 
-    let runner_cfg = cli_cfg
-        .runner_cfg
+    let runner_cfg = runner_cfg
         .clone()
         .unwrap_or(embedded_dir.join("runner.toml"));
     let runner_cfg: RunnerConfig = match std::fs::read_to_string(&runner_cfg) {
@@ -57,7 +54,7 @@ pub fn get_cfg(cli_cfg: &CliConfig) -> Result<ResolvedConfig, ConfigError> {
 
     Ok(ResolvedConfig {
         runner_cfg,
-        verbose: cli_cfg.verbose,
+        verbose,
         workspace_dir,
         embedded_dir,
     })
@@ -71,6 +68,8 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct RunCmdConfig {
+    #[arg(long)]
+    pub runner_cfg: Option<PathBuf>,
     #[arg(long)]
     pub run_name: Option<String>,
     #[arg(long)]
