@@ -3,7 +3,7 @@ name = "embedded-runner"
 description = "Cargo runner for embedded projects using OpenOCD."
 repository = "https://github.com/mhatzl/embedded-runner"
 license = "MIT"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
