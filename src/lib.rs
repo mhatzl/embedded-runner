@@ -137,7 +137,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     let gdb_script = main_cfg
         .runner_cfg
-        .gdb_script(&run_cfg.binary, &output_dir)
+        .gdb_script(&run_cfg.binary, &output_dir, run_cfg.segger_gdb)
         .map_err(|_err| RunnerError::GdbScript(String::new()))?;
 
     let gdb_script_file = output_dir.join("embedded.gdb");

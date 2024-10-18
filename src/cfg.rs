@@ -70,6 +70,9 @@ pub enum Cmd {
 pub struct RunCmdConfig {
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
+    /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+    #[arg(long)]
+    pub segger_gdb: bool,
     #[arg(long)]
     pub run_name: Option<String>,
     #[arg(long)]
@@ -122,7 +125,12 @@ pub enum CfgError {
 }
 
 impl RunnerConfig {
-    pub fn gdb_script(&self, binary: &Path, output_dir: &Path) -> Result<String, CfgError> {
+    pub fn gdb_script(
+        &self,
+        binary: &Path,
+        output_dir: &Path,
+        segger_gdb: bool,
+    ) -> Result<String, CfgError> {
         let resolved_load = if let Some(load) = &self.load {
             resolve_load(load, binary)?
         } else {
@@ -156,6 +164,27 @@ impl RunnerConfig {
             format!("target extended-remote | openocd -c \"gdb_port pipe; log_output {gdb_logfile}\" -f {openocd_cfg}")
         };
 
+        let rtt_section = if segger_gdb {
+            format!(
+                "
+monitor exec SetRTTSearchRanges 0x{:x} 0x{:x}
+monitor exec SetRTTChannel 0
+            ",
+                rtt_address, rtt_length
+            )
+        } else {
+            format!(
+                "
+monitor rtt setup 0x{:x} {} \"SEGGER RTT\"
+monitor rtt start
+monitor rtt server start {} 0
+            ",
+                rtt_address,
+                rtt_length,
+                self.rtt_port.unwrap_or(super::DEFAULT_RTT_PORT)
+            )
+        };
+
         Ok(format!(
             "
 set pagination off
@@ -167,9 +196,7 @@ set pagination off
 b main
 continue
 
-monitor rtt setup 0x{:x} {} \"SEGGER RTT\"
-monitor rtt start
-monitor rtt server start {} 0
+{rtt_section}
 
 shell {sleep_cmd} 1
 
@@ -179,11 +206,7 @@ shell {sleep_cmd} 1
 
 quit        
 ",
-            gdb_conn,
-            resolved_load,
-            rtt_address,
-            rtt_length,
-            self.rtt_port.unwrap_or(super::DEFAULT_RTT_PORT)
+            gdb_conn, resolved_load
         ))
     }
 }
