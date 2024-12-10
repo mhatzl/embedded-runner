@@ -68,21 +68,32 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct RunCmdConfig {
+    /// Filepath to a TOML file that contains the runner configuration.
+    ///
+    /// Default: `.embedded/runner.toml`
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
     /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
     ///
-    /// This setting overwrites the one optionally set in the `runner.toml` configuration.
+    /// This setting overwrites the one optionally set in the runner configuration.
     #[arg(long)]
     pub segger_gdb: Option<bool>,
     #[arg(long)]
+    /// Optional name for the test run.
+    ///
+    /// Default: Absolut filepath of the executed binary.
     pub run_name: Option<String>,
+    /// Optional path to a directory that is used to store test results and logs
+    ///
+    /// Default: `<binary filepath>_runner` (`<binary filepath>` gets substituted with the filepath set for the `binary` argument).
     #[arg(long)]
     pub output_dir: Option<PathBuf>,
     /// Path to look for JSON metadata that is linked with the test run.
-    /// The default is to look for the file at `.embedded/meta.json`.
+    ///
+    /// Default: `.embedded/meta.json`
     #[arg(long)]
     pub meta_filepath: Option<PathBuf>,
+    /// Filepath to the binary that should be run on the embedded device.
     pub binary: PathBuf,
 }
 
@@ -117,6 +128,11 @@ pub struct RunnerConfig {
     /// Default: `false`
     #[serde(alias = "segger-gdb", default)]
     pub segger_gdb: bool,
+    /// Path to look for JSON metadata that is linked with the test run.
+    ///
+    /// Default: `.embedded/meta.json`
+    #[serde(alias = "meta-filepath")]
+    pub meta_filepath: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

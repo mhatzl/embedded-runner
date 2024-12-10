@@ -202,6 +202,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
         let meta_path = run_cfg
             .meta_filepath
+            .or(main_cfg.runner_cfg.meta_filepath.clone())
             .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
 
         let mut meta = if meta_path.exists() {
