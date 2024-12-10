@@ -71,8 +71,10 @@ pub struct RunCmdConfig {
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
     /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+    ///
+    /// This setting overwrites the one optionally set in the `runner.toml` configuration.
     #[arg(long)]
-    pub segger_gdb: bool,
+    pub segger_gdb: Option<bool>,
     #[arg(long)]
     pub run_name: Option<String>,
     #[arg(long)]
@@ -110,6 +112,11 @@ pub struct RunnerConfig {
     pub rtt_port: Option<u16>,
     #[serde(alias = "extern-coverage")]
     pub extern_coverage: Option<ExternCoverageConfig>,
+    /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+    ///
+    /// Default: `false`
+    #[serde(alias = "segger-gdb", default)]
+    pub segger_gdb: bool,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
