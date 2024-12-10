@@ -108,6 +108,17 @@ pub struct RunnerConfig {
     pub post_runner_windows: Option<Command>,
     #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
+    #[serde(alias = "extern-coverage")]
+    pub extern_coverage: Option<ExternCoverageConfig>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ExternCoverageConfig {
+    /// Coverage format of the given file.
+    ///
+    /// Currently supported formats: CoberturaV4
+    pub format: covcon::format::CoverageFormat,
+    pub filepath: PathBuf,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
