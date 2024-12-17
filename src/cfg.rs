@@ -89,6 +89,8 @@ pub struct CollectCmdConfig {
 #[derive(Debug, Default, Clone, serde::Deserialize)]
 pub struct RunnerConfig {
     pub load: Option<String>,
+    #[serde(alias = "pre-exit")]
+    pub pre_exit: Option<String>,
     #[serde(alias = "openocd-cfg")]
     pub openocd_cfg: Option<PathBuf>,
     #[serde(alias = "gdb-connection")]
@@ -105,6 +107,8 @@ pub struct RunnerConfig {
     pub post_runner_windows: Option<Command>,
     #[serde(alias = "rtt-port")]
     pub rtt_port: Option<u16>,
+    #[serde(alias = "windows-sleep")]
+    pub windows_sleep: Option<bool>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

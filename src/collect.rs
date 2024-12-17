@@ -7,6 +7,7 @@ use crate::{cfg::CollectCmdConfig, coverage, RunnerError};
 pub async fn run(cfg: CollectCmdConfig) -> Result<(), RunnerError> {
     let coverages_file = coverage::coverages_filepath();
     let mut coverages = mantra_schema::coverage::CoverageSchema {
+        version: Some(mantra_schema::SCHEMA_VERSION.to_string()),
         test_runs: Vec::new(),
     };
 
@@ -28,7 +29,8 @@ pub async fn run(cfg: CollectCmdConfig) -> Result<(), RunnerError> {
                 .await
                 .expect("Coverage file exists.");
             let mut coverage: mantra_schema::coverage::CoverageSchema =
-                serde_json::from_str(&coverage_content).expect("Coverage was serialized as JSON.");
+                serde_json::from_str(&coverage_content)
+                    .expect("Coverage was serialized with embedded-runner.");
 
             coverages.test_runs.append(&mut coverage.test_runs);
         }

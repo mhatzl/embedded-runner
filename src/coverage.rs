@@ -1,9 +1,13 @@
-use std::path::PathBuf;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use defmt_json_schema::v1::JsonFrame as DefmtFrame;
 use mantra_schema::{
-    coverage::{CoverageSchema, Test, TestRun, TestState},
-    traces::TracePk,
+    coverage::{CoverageSchema, CoveredFile, CoveredFileTrace, Test, TestRun, TestState},
+    requirements::ReqId,
+    Line,
 };
 use regex::Regex;
 use time::OffsetDateTime;
@@ -50,6 +54,13 @@ pub fn coverage_from_defmt_frames(
         CoverageError::BadDate(format!("Timestamp '{timestamp}' is not a valid date."))
     })?;
 
+    let test_fn_matcher = TEST_FN_MATCHER.get_or_init(|| {
+        Regex::new(
+            r"^\(\d+/(?<nr_tests>\d+)\)\s(?<state>(?:running)|(?:ignoring))\s`(?<fn_name>.+)`...",
+        )
+        .expect("Could not create regex matcher for defmt test-fn entries.")
+    });
+
     let mut test_run = TestRun {
         name: run_name,
         date,
@@ -58,20 +69,14 @@ pub fn coverage_from_defmt_frames(
         tests: Vec::new(),
         nr_of_tests: 0,
     };
-
     let mut current_test: Option<Test> = None;
-
-    let test_fn_matcher = TEST_FN_MATCHER.get_or_init(|| {
-        Regex::new(
-            r"^\(\d+/(?<nr_tests>\d+)\)\s(?<state>(?:running)|(?:ignoring))\s`(?<fn_name>.+)`...",
-        )
-        .expect("Could not create regex matcher for defmt test-fn entries.")
-    });
+    let mut covered_traces: HashMap<PathBuf, HashMap<Line, HashSet<ReqId>>> = HashMap::new();
 
     for frame in frames {
         if let Some(captured_test_fn) = test_fn_matcher.captures(&frame.data) {
             if let Some(mut test) = current_test.take() {
                 test.state = TestState::Passed;
+                test.covered_files = drain_covered_traces(&mut covered_traces);
                 test_run.tests.push(test);
             }
 
@@ -123,36 +128,60 @@ pub fn coverage_from_defmt_frames(
 
             match fn_state.as_str() {
                 "running" => {
-                    current_test = Some(Test { name: test_fn_name, filepath: PathBuf::from(file), line: line_nr, state: TestState::Failed, covered_traces: Vec::new(), covered_lines: Vec::new() });
+                    current_test = Some(Test { name: test_fn_name, filepath: PathBuf::from(file), line: line_nr, state: TestState::Failed, covered_files: Vec::new() });
                 }
                 "ignoring" => {
-                    test_run.tests.push(Test{ name: test_fn_name, filepath: PathBuf::from(file), line: line_nr, state: TestState::Skipped { reason: None }, covered_traces: Vec::new(), covered_lines: Vec::new() });
+                    test_run.tests.push(Test{ name: test_fn_name, filepath: PathBuf::from(file), line: line_nr, state: TestState::Skipped { reason: None }, covered_files: Vec::new() });
 
-                    current_test = None;
+                    debug_assert_eq!(current_test, None, "Open test state for ignored test.");
+                    debug_assert!(covered_traces.is_empty(), "Covered traces for ignored test.");
                 }
                 _ => unreachable!("Invalid state '{}' for test function '{}' in log entry '{}'. Only 'running' and 'ignoring' are allowed.", fn_state.as_str(), fn_name.as_str(), frame.data),
             }
         } else if let Some(covered_req) =
             mantra_rust_macros::extract::extract_first_coverage(&frame.data)
         {
-            if let Some(test) = &mut current_test {
-                test.covered_traces.push(TracePk {
-                    req_id: covered_req.id,
-                    filepath: covered_req.file,
-                    line: covered_req.line,
-                });
-            }
+            covered_traces
+                .entry(covered_req.file)
+                .or_default()
+                .entry(covered_req.line)
+                .or_default()
+                .insert(covered_req.id);
         } else if frame.data == "all tests passed!" {
             if let Some(mut test) = current_test.take() {
                 test.state = TestState::Passed;
+                test.covered_files = drain_covered_traces(&mut covered_traces);
                 test_run.tests.push(test);
             }
         }
     }
 
     Ok(CoverageSchema {
+        version: Some(mantra_schema::SCHEMA_VERSION.to_string()),
         test_runs: vec![test_run],
     })
+}
+
+fn drain_covered_traces(
+    covered_traces: &mut HashMap<PathBuf, HashMap<Line, HashSet<ReqId>>>,
+) -> Vec<CoveredFile> {
+    let mut covered_files = Vec::new();
+
+    for (filepath, traced_lines) in covered_traces.drain() {
+        covered_files.push(CoveredFile {
+            filepath,
+            covered_traces: traced_lines
+                .into_iter()
+                .map(|(line, req_ids)| CoveredFileTrace {
+                    req_ids: req_ids.into_iter().collect(),
+                    line,
+                })
+                .collect(),
+            covered_lines: Vec::new(),
+        });
+    }
+
+    covered_files
 }
 
 static TEST_FN_MATCHER: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
