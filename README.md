@@ -34,6 +34,11 @@ The OpenOCD executable `openocd` must be available on path.
    # e.g. "load {{ binary_filepath }}"
    load = "load"
 
+   # Optional: Section in the gdb script that is placed directly before `quit`.
+   #
+   # This section is resolved like the load section.
+   pre-exit = ""
+
    # Optional: Path to a custom OpenOCD configuration
    openocd-cfg = ".embedded/openocd.cfg"
 
@@ -47,10 +52,15 @@ The OpenOCD executable `openocd` must be available on path.
    rtt-port = 19021
 
    # Optional: `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+   #
+   # Note: You must start your own SEGGER GDB server, and set `gdb-connection` accordingly.
    segger-gdb = false
 
-   # Optional: Path to look for JSON metadata that is linked with the test run.
-   meta-filepath = ".embedded/meta.json"
+   # Optional: Path to look for custom JSON data that is linked with the test run.
+   data-filepath = ".embedded/test_run_data.json"
+
+   # Optional: Uses the `sleep` command instead of `timeout` on Windows (Useful if running in GitBash).
+   windows-sleep = false
 
    # Optional: Define a command to run before the runner executes the binary.
    # A 'post-runner' may also be set that is run after executing the binary.

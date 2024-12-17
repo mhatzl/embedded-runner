@@ -38,7 +38,7 @@ pub fn coverages_filepath() -> PathBuf {
 
 pub fn coverage_from_defmt_frames(
     run_name: String,
-    meta: Option<serde_json::Value>,
+    data: Option<serde_json::Value>,
     frames: &[DefmtFrame],
     logs: Option<String>,
 ) -> Result<CoverageSchema, CoverageError> {
@@ -64,7 +64,7 @@ pub fn coverage_from_defmt_frames(
     let mut test_run = TestRun {
         name: run_name,
         date,
-        meta,
+        data,
         logs,
         tests: Vec::new(),
         nr_of_tests: 0,

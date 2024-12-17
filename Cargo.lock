@@ -270,7 +270,9 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 
 [[package]]
 name = "covcon"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ac3de7406fd433ce7a381a2c7997111f8c6de78fdc5f239e7bb439b20249188"
 dependencies = [
  "clap",
  "quick-xml",
@@ -423,7 +425,7 @@ checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
 name = "embedded-runner"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "clap",
  "covcon",
@@ -696,7 +698,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-lang-tracing"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7142ef28e2eb8a1658786da0f25b16535bbe3faee99aa36168b4034acdb53e8"
 dependencies = [
  "mantra-schema",
  "path-slash",
@@ -707,7 +711,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-macros"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cfceff27353a5c773321ad79773898899a54e3a55b6cf82f8dc595f4d28c1e1"
 dependencies = [
  "mantra-rust-procm",
  "once_cell",
@@ -716,7 +722,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-rust-procm"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61bdc1937ec2f200f4b9ac2ceae3e60b4aa23d59f61d08ce25083712efa1af7e"
 dependencies = [
  "mantra-lang-tracing",
  "proc-macro2",
@@ -726,7 +734,9 @@ dependencies = [
 
 [[package]]
 name = "mantra-schema"
-version = "0.6.3"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f02f38b464a05226da4697f4691406a0118d68b755e9347f67de1f610bbcf7b1"
 dependencies = [
  "schemars",
  "serde",

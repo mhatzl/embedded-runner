@@ -88,11 +88,11 @@ pub struct RunCmdConfig {
     /// Default: `<binary filepath>_runner` (`<binary filepath>` gets substituted with the filepath set for the `binary` argument).
     #[arg(long)]
     pub output_dir: Option<PathBuf>,
-    /// Path to look for JSON metadata that is linked with the test run.
+    /// Path to look for custom JSON data that is linked with the test run.
     ///
-    /// Default: `.embedded/meta.json`
+    /// Default: `.embedded/test_run_data.json`
     #[arg(long)]
-    pub meta_filepath: Option<PathBuf>,
+    pub data_filepath: Option<PathBuf>,
     /// Filepath to the binary that should be run on the embedded device.
     pub binary: PathBuf,
 }
@@ -132,11 +132,11 @@ pub struct RunnerConfig {
     /// Default: `false`
     #[serde(alias = "segger-gdb", default)]
     pub segger_gdb: bool,
-    /// Path to look for JSON metadata that is linked with the test run.
+    /// Path to look for custom JSON data that is linked with the test run.
     ///
-    /// Default: `.embedded/meta.json`
-    #[serde(alias = "meta-filepath")]
-    pub meta_filepath: Option<PathBuf>,
+    /// Default: `.embedded/test_run_data.json`
+    #[serde(alias = "data-filepath", alias = "test-run-data-filepath")]
+    pub data_filepath: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -158,8 +158,12 @@ pub struct Command {
 pub enum CfgError {
     #[error("Could not find rtt block in binary. Cause: {}", .0)]
     FindingRttBlock(String),
+    #[error("Could not build the template context. Cause: {}", .0)]
+    BuildingTemplateContext(String),
     #[error("Could not resolve the load section. Cause: {}", .0)]
-    ResolvingLoadSection(String),
+    ResolvingLoad(String),
+    #[error("Could not resolve the pre-exit section. Cause: {}", .0)]
+    ResolvingPreExit(String),
 }
 
 impl RunnerConfig {
@@ -169,8 +173,10 @@ impl RunnerConfig {
         output_dir: &Path,
         segger_gdb: bool,
     ) -> Result<String, CfgError> {
+        let context = build_template_context(binary)?;
         let resolved_load = if let Some(load) = &self.load {
-            resolve_load(load, binary)?
+            Tera::one_off(load, &context, false)
+                .map_err(|err| CfgError::ResolvingLoad(err.to_string()))?
         } else {
             "load".to_string()
         };
@@ -180,6 +186,12 @@ impl RunnerConfig {
         let sleep_cmd = "timeout";
         #[cfg(not(target_os = "windows"))]
         let sleep_cmd = "sleep";
+
+        let sleep_cmd = if self.windows_sleep == Some(true) {
+            "sleep"
+        } else {
+            sleep_cmd
+        };
 
         let gdb_logfile = self
             .gdb_logfile
@@ -223,13 +235,20 @@ monitor rtt server start {} 0
             )
         };
 
+        let pre_exit_section = if let Some(pre_exit_template) = &self.pre_exit {
+            Tera::one_off(pre_exit_template, &context, false)
+                .map_err(|err| CfgError::ResolvingPreExit(err.to_string()))?
+        } else {
+            String::new()
+        };
+
         Ok(format!(
             "
 set pagination off
 
-{}
+{gdb_conn}
 
-{}
+{resolved_load}
 
 b main
 continue
@@ -242,9 +261,10 @@ continue
 
 shell {sleep_cmd} 1
 
+{pre_exit_section}
+
 quit        
-",
-            gdb_conn, resolved_load
+"
         ))
     }
 }
@@ -268,7 +288,7 @@ fn find_rtt_block(binary: &Path) -> Result<(u64, u64), CfgError> {
     ))
 }
 
-fn resolve_load(load: &str, binary: &Path) -> Result<String, CfgError> {
+fn build_template_context(binary: &Path) -> Result<Context, CfgError> {
     let mut context = Context::new();
     let parent = binary.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     context.insert(
@@ -282,7 +302,7 @@ fn resolve_load(load: &str, binary: &Path) -> Result<String, CfgError> {
         &Path::join(
             &parent,
             binary.file_stem().ok_or_else(|| {
-                CfgError::ResolvingLoadSection(format!(
+                CfgError::BuildingTemplateContext(format!(
                     "Given binary '{}' has no valid filename.",
                     binary.display()
                 ))
@@ -298,16 +318,16 @@ fn resolve_load(load: &str, binary: &Path) -> Result<String, CfgError> {
             .expect("Binary path has only valid Unicode characters."),
     );
 
-    Tera::one_off(load, &context, false).map_err(|err| {
-        CfgError::ResolvingLoadSection(format!("Failed rendering the load template. Cause: {err}"))
-    })
+    Ok(context)
 }
 
 #[cfg(test)]
 mod test {
     use std::path::PathBuf;
 
-    use super::{find_rtt_block, resolve_load};
+    use crate::cfg::build_template_context;
+
+    use super::find_rtt_block;
 
     #[test]
     fn load_template() {
@@ -317,7 +337,8 @@ file \"{{ binary_filepath }}\"";
 
         let binary = PathBuf::from("./target/debug/hello.exe");
 
-        let resolved = resolve_load(load, &binary).unwrap();
+        let context = build_template_context(&binary).unwrap();
+        let resolved = tera::Tera::one_off(load, &context, false).unwrap();
 
         assert!(
             resolved.contains("target/debug/debug_config.ihex"),

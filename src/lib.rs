@@ -200,35 +200,35 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
             .run_name
             .unwrap_or(rel_binary_path.display().to_string());
 
-        let meta_path = run_cfg
-            .meta_filepath
-            .or(main_cfg.runner_cfg.meta_filepath.clone())
-            .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
+        let data_path = run_cfg
+            .data_filepath
+            .or(main_cfg.runner_cfg.data_filepath.clone())
+            .unwrap_or(main_cfg.embedded_dir.join("test_run_data.json"));
 
-        let mut meta = if meta_path.exists() {
-            let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|err| {
+        let mut data = if data_path.exists() {
+            let data_content = tokio::fs::read_to_string(&data_path).await.map_err(|err| {
                 RunnerError::Setup(format!(
-                    "Could not read metadata '{}'. Cause: {}",
-                    meta_path.display(),
+                    "Could not read custom test run data '{}'. Cause: {}",
+                    data_path.display(),
                     err
                 ))
             })?;
 
-            let mut meta: serde_json::Map<String, serde_json::Value> =
-                serde_json::from_str(&meta_content).map_err(|err| {
+            let mut data: serde_json::Map<String, serde_json::Value> =
+                serde_json::from_str(&data_content).map_err(|err| {
                     RunnerError::Setup(format!(
                         "Could not deserialize metadata '{}'. Cause: {}",
-                        meta_path.display(),
+                        data_path.display(),
                         err
                     ))
                 })?;
 
-            meta.insert(
+            data.insert(
                 "binary".to_string(),
                 serde_json::Value::String(rel_binary_str),
             );
 
-            serde_json::Value::Object(meta)
+            serde_json::Value::Object(data)
         } else {
             json!({
                 "binary": rel_binary_str
@@ -248,7 +248,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
                     match covcon::convert::convert_to_json(&cov_cfg) {
                         Ok(json_cov) => {
-                            let meta_map = meta.as_object_mut().expect("Meta is created as object above.");
+                            let meta_map = data.as_object_mut().expect("Meta is created as object above.");
                             meta_map.insert("coverage".to_string(), json_cov);
                         },
                         Err(err) => log::error!("Failed extracting external coverage data. External coverage will be ignored. Cause: {err}"),
@@ -262,9 +262,13 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
         let logs =
             serde_json::to_string(&defmt_frames).expect("DefmtFrames were deserialized before.");
 
-        let coverage =
-            coverage::coverage_from_defmt_frames(run_name, Some(meta), &defmt_frames, Some(logs))
-                .map_err(RunnerError::Coverage)?;
+        let coverage = coverage::coverage_from_defmt_frames(
+            run_name,
+            Some(data),
+            defmt_frames.as_slice(),
+            Some(logs),
+        )
+        .map_err(RunnerError::Coverage)?;
 
         // If no tests were found, execution most likely `cargo run` or `cargo bench` => no test coverage
         if coverage

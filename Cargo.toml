@@ -3,7 +3,7 @@ name = "embedded-runner"
 description = "Cargo runner for embedded projects using OpenOCD."
 repository = "https://github.com/mhatzl/embedded-runner"
 license = "MIT"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,9 +12,9 @@ edition = "2021"
 clap = { version = "4.5.4", features = ["derive"] }
 tera = "1.19.1"
 object = "0.35.0"
-mantra-schema = { path = "../mantra/schema", version = "0.6.0" }
-mantra-lang-tracing = { path = "../mantra/langs/mantra-lang-tracing", version = "0.6.0", default-features = false }
-mantra-rust-macros = {  path = "../mantra/langs/rust/mantra-rust-macros", version = "0.6.0", features = ["extract"] }
+mantra-schema = { version = "0.7.0" }
+mantra-lang-tracing = { version = "0.7.0", default-features = false }
+mantra-rust-macros = {  version = "0.7.0", features = ["extract"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0" }
 defmt-decoder = { version = "=0.3.10", features = [
@@ -31,4 +31,4 @@ thiserror = "1.0.59"
 path-clean = "1.0.1"
 path-slash = "0.2.1"
 regex = "1.10.4"
-covcon = { version = "0.1.0", path = "../covcon" }
+covcon = "0.2.0"
