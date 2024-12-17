@@ -46,19 +46,33 @@ The OpenOCD executable `openocd` must be available on path.
    # Optional: RTT port to use on the host
    rtt-port = 19021
 
+   # Optional: `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+   segger-gdb = false
+
+   # Optional: Path to look for JSON metadata that is linked with the test run.
+   meta-filepath = ".embedded/meta.json"
+
    # Optional: Define a command to run before the runner executes the binary.
    # A 'post-runner' may also be set that is run after executing the binary.
    #
    # On windows, `pre-runner-windows` is available that takes precedence over `pre-runner`.
    # Same with `post-runner-windows`.
    [pre-runner]
-
    # Name of the command
    name = "powershell"
-
    # Arguments passed to the command.
    # The binary path is automatically added as last argument 
    args = ["echo"]
+
+   # Optional: External code coverage data that will be stored in the `meta` field of the generated JSON coverage file.
+   # This information may then, for example, be accessed when creating reports with mantra (https://github.com/mhatzl/mantra).
+   [extern-coverage]
+   # Specify the coverage format of the external data.
+   #
+   # Supported Formats: CoberturaV4
+   format = "CoberturaV4"
+   # Filepath to the file containing the external coverage data.
+   filepath = "coverage.xml"
    ```
 
 4. Optional: Add your OpenOCD configuration

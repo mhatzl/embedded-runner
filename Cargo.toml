@@ -31,3 +31,4 @@ thiserror = "1.0.59"
 path-clean = "1.0.1"
 path-slash = "0.2.1"
 regex = "1.10.4"
+covcon = { version = "0.1.0", path = "../covcon" }

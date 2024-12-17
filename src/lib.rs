@@ -6,6 +6,7 @@ use std::{
 };
 
 use cfg::{CliConfig, ResolvedConfig, RunCmdConfig, RunnerConfig};
+use covcon::cfg::DataFormat;
 use coverage::CoverageError;
 use defmt_json_schema::v1::JsonFrame;
 use path_clean::PathClean;
@@ -137,7 +138,11 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     let gdb_script = main_cfg
         .runner_cfg
-        .gdb_script(&run_cfg.binary, &output_dir)
+        .gdb_script(
+            &run_cfg.binary,
+            &output_dir,
+            run_cfg.segger_gdb.unwrap_or(main_cfg.runner_cfg.segger_gdb),
+        )
         .map_err(|_err| RunnerError::GdbScript(String::new()))?;
 
     let gdb_script_file = output_dir.join("embedded.gdb");
@@ -197,9 +202,10 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
         let meta_path = run_cfg
             .meta_filepath
+            .or(main_cfg.runner_cfg.meta_filepath.clone())
             .unwrap_or(main_cfg.embedded_dir.join("meta.json"));
 
-        let meta = if meta_path.exists() {
+        let mut meta = if meta_path.exists() {
             let meta_content = tokio::fs::read_to_string(&meta_path).await.map_err(|err| {
                 RunnerError::Setup(format!(
                     "Could not read metadata '{}'. Cause: {}",
@@ -228,6 +234,30 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
                 "binary": rel_binary_str
             })
         };
+
+        if let Some(extern_cov) = &main_cfg.runner_cfg.extern_coverage {
+            match (tokio::fs::read_to_string(&extern_cov.filepath).await, covcon::cfg::DataFormat::try_from(extern_cov.filepath.extension())) {
+                (Ok(content), Ok(DataFormat::Xml)) => {
+                    let cov_cfg = covcon::cfg::ConversionConfig {
+                        in_fmt: extern_cov.format,
+                        in_content: content,
+                        in_data_fmt: DataFormat::Xml,
+                        out_fmt: covcon::format::CoverageFormat::CoberturaV4,
+                        out_data_fmt: DataFormat::Json,
+                    };
+
+                    match covcon::convert::convert_to_json(&cov_cfg) {
+                        Ok(json_cov) => {
+                            let meta_map = meta.as_object_mut().expect("Meta is created as object above.");
+                            meta_map.insert("coverage".to_string(), json_cov);
+                        },
+                        Err(err) => log::error!("Failed extracting external coverage data. External coverage will be ignored. Cause: {err}"),
+                    }
+                }
+                (Err(err), _) => log::error!("Failed to read external coverage file. External coverage will be ignored. Cause: {err}"),
+                (_, _) => log::error!("Coverage file must be XML. External coverage will be ignored."),
+            }
+        }
 
         let logs =
             serde_json::to_string(&defmt_frames).expect("DefmtFrames were deserialized before.");

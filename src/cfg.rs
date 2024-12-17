@@ -68,16 +68,32 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, clap::Parser)]
 pub struct RunCmdConfig {
+    /// Filepath to a TOML file that contains the runner configuration.
+    ///
+    /// Default: `.embedded/runner.toml`
     #[arg(long)]
     pub runner_cfg: Option<PathBuf>,
+    /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+    ///
+    /// This setting overwrites the one optionally set in the runner configuration.
     #[arg(long)]
+    pub segger_gdb: Option<bool>,
+    #[arg(long)]
+    /// Optional name for the test run.
+    ///
+    /// Default: Absolut filepath of the executed binary.
     pub run_name: Option<String>,
+    /// Optional path to a directory that is used to store test results and logs
+    ///
+    /// Default: `<binary filepath>_runner` (`<binary filepath>` gets substituted with the filepath set for the `binary` argument).
     #[arg(long)]
     pub output_dir: Option<PathBuf>,
     /// Path to look for JSON metadata that is linked with the test run.
-    /// The default is to look for the file at `.embedded/meta.json`.
+    ///
+    /// Default: `.embedded/meta.json`
     #[arg(long)]
     pub meta_filepath: Option<PathBuf>,
+    /// Filepath to the binary that should be run on the embedded device.
     pub binary: PathBuf,
 }
 
@@ -109,6 +125,27 @@ pub struct RunnerConfig {
     pub rtt_port: Option<u16>,
     #[serde(alias = "windows-sleep")]
     pub windows_sleep: Option<bool>,
+    #[serde(alias = "extern-coverage")]
+    pub extern_coverage: Option<ExternCoverageConfig>,
+    /// `true`: Uses RTT commands to communicate with SEGGER GDB instead of the `monitor rtt` commands from OpenOCD.
+    ///
+    /// Default: `false`
+    #[serde(alias = "segger-gdb", default)]
+    pub segger_gdb: bool,
+    /// Path to look for JSON metadata that is linked with the test run.
+    ///
+    /// Default: `.embedded/meta.json`
+    #[serde(alias = "meta-filepath")]
+    pub meta_filepath: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ExternCoverageConfig {
+    /// Coverage format of the given file.
+    ///
+    /// Currently supported formats: CoberturaV4
+    pub format: covcon::format::CoverageFormat,
+    pub filepath: PathBuf,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -126,7 +163,12 @@ pub enum CfgError {
 }
 
 impl RunnerConfig {
-    pub fn gdb_script(&self, binary: &Path, output_dir: &Path) -> Result<String, CfgError> {
+    pub fn gdb_script(
+        &self,
+        binary: &Path,
+        output_dir: &Path,
+        segger_gdb: bool,
+    ) -> Result<String, CfgError> {
         let resolved_load = if let Some(load) = &self.load {
             resolve_load(load, binary)?
         } else {
@@ -160,6 +202,27 @@ impl RunnerConfig {
             format!("target extended-remote | openocd -c \"gdb_port pipe; log_output {gdb_logfile}\" -f {openocd_cfg}")
         };
 
+        let rtt_section = if segger_gdb {
+            format!(
+                "
+monitor exec SetRTTSearchRanges 0x{:x} 0x{:x}
+monitor exec SetRTTChannel 0
+            ",
+                rtt_address, rtt_length
+            )
+        } else {
+            format!(
+                "
+monitor rtt setup 0x{:x} {} \"SEGGER RTT\"
+monitor rtt start
+monitor rtt server start {} 0
+            ",
+                rtt_address,
+                rtt_length,
+                self.rtt_port.unwrap_or(super::DEFAULT_RTT_PORT)
+            )
+        };
+
         Ok(format!(
             "
 set pagination off
@@ -171,9 +234,7 @@ set pagination off
 b main
 continue
 
-monitor rtt setup 0x{:x} {} \"SEGGER RTT\"
-monitor rtt start
-monitor rtt server start {} 0
+{rtt_section}
 
 shell {sleep_cmd} 1
 
@@ -183,11 +244,7 @@ shell {sleep_cmd} 1
 
 quit        
 ",
-            gdb_conn,
-            resolved_load,
-            rtt_address,
-            rtt_length,
-            self.rtt_port.unwrap_or(super::DEFAULT_RTT_PORT)
+            gdb_conn, resolved_load
         ))
     }
 }
