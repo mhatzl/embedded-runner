@@ -217,10 +217,9 @@ impl RunnerConfig {
         let rtt_section = if segger_gdb {
             format!(
                 "
-monitor exec SetRTTSearchRanges 0x{:x} 0x{:x}
+monitor exec SetRTTSearchRanges 0x{rtt_address:x} 0x{rtt_length:x}
 monitor exec SetRTTChannel 0
-            ",
-                rtt_address, rtt_length
+            "
             )
         } else {
             format!(

@@ -144,7 +144,7 @@ pub fn read_defmt_frames(
                                         "no-location info available".to_string()
                                     };
 
-                                    println!("             | => {}", location);
+                                    println!("             | => {location}");
                                 }
                             }
                         }
