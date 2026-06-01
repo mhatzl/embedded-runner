@@ -154,6 +154,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
     let (defmt_frames, gdb_result) = run_gdb_sequence(
         run_cfg.binary,
+        &run_cfg.gdb,
         &main_cfg.workspace_dir,
         &gdb_script_file,
         &main_cfg.runner_cfg,
@@ -374,6 +375,7 @@ pub async fn run_cmd(main_cfg: &ResolvedConfig, run_cfg: RunCmdConfig) -> Result
 
 pub async fn run_gdb_sequence(
     binary: PathBuf,
+    gdb: &str,
     workspace_dir: &Path,
     tmp_gdb_file: &Path,
     runner_cfg: &RunnerConfig,
@@ -384,9 +386,7 @@ pub async fn run_gdb_sequence(
     ),
     RunnerError,
 > {
-    let mut gdb_cmd = tokio::process::Command::new(
-        std::env::var("GDB").unwrap_or("arm-none-eabi-gdb".to_string()),
-    );
+    let mut gdb_cmd = tokio::process::Command::new(gdb);
     let mut gdb = gdb_cmd
         .args([
             "-x",

@@ -9,12 +9,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive", "env"] }
 tera = "1.19.1"
 object = "0.35.0"
 mantra-schema = { version = "0.7.0" }
 mantra-lang-tracing = { version = "0.7.0", default-features = false }
-mantra-rust-macros = {  version = "0.7.0", features = ["extract"] }
+mantra-rust-macros = { version = "0.7.0", features = ["extract"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0" }
 defmt-decoder = { version = "=1.0.0", features = [
