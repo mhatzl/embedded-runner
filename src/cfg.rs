@@ -93,6 +93,11 @@ pub struct RunCmdConfig {
     /// Default: `.embedded/test_run_data.json`
     #[arg(long)]
     pub data_filepath: Option<PathBuf>,
+    /// GDB binary to execute.
+    ///
+    /// Provide either a path, or a binary name which will be looked up in PATH.
+    #[arg(long, env, default_value = "arm-none-eabi-gdb")]
+    pub gdb: String,
     /// Filepath to the binary that should be run on the embedded device.
     pub binary: PathBuf,
 }
@@ -262,7 +267,7 @@ shell {sleep_cmd} 1
 
 {pre_exit_section}
 
-quit        
+quit
 "
         ))
     }
