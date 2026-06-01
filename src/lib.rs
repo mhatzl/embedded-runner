@@ -32,6 +32,8 @@ pub enum RunnerError {
     RttTimeout,
     #[error("Error from gdb: {}", .0)]
     Gdb(String),
+    #[error("Error executing gdb ('{bin}'): {source}")]
+    GdbExec { bin: String, source: std::io::Error },
     #[error("Error setting up the gdb script: {}", .0)]
     GdbScript(String),
     #[error("{}", .0)]
@@ -394,7 +396,10 @@ pub async fn run_gdb_sequence(
         .current_dir(workspace_dir)
         .stdout(Stdio::piped())
         .spawn()
-        .unwrap();
+        .map_err(|e| RunnerError::GdbExec {
+            bin: gdb.to_string(),
+            source: e,
+        })?;
 
     println!("-------------------- Communication Setup --------------------");
 
